@@ -4,56 +4,127 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sdcoffey/techan"
+	"gonum.org/v1/plot/vg"
+	"io"
 	"someshit/internal/strategy/utils"
 	"someshit/pkg/proto"
 )
 
 type BollingerBands struct {
-	CandleIntervalInHours  int
-	AnalyzeIntervalInHours int
-	Window                 int
-	Sigma                  float64 //отклонение(влияет на ширину канала)
+	//AnalyzeIntervalInHours int
+	Window              int
+	Sigma               float64 //отклонение(влияет на ширину канала)
+	CandleIntervalHours int
+	//PriceBetweenBands bool
 }
 
-func NewBollingerBand(candleIntervalHours, analyzeInterval, window int, sigma float64) *BollingerBands {
+func NewBollingerBand(candleIntervalHours, window int, sigma float64) *BollingerBands {
 	return &BollingerBands{
-		CandleIntervalInHours:  candleIntervalHours,
-		AnalyzeIntervalInHours: analyzeInterval,
-		Window:                 window,
-		Sigma:                  sigma,
+		CandleIntervalHours: candleIntervalHours,
+		//AnalyzeIntervalInHours: analyzeInterval,
+		Window: window,
+		Sigma:  sigma,
+		//PriceBetweenBands: true,
 	}
 }
 
 // при пробитии ценой нижней границы - покупка, при пробитии верхней границы - продажа
-func (bb *BollingerBands) Indicator(candles []*proto.HistoricCandle) (bool, error) {
+func (bb *BollingerBands) Indicator(candles []*proto.HistoricCandle) (res IndicatorSignal, err error) {
+	//нужен для обработки ошибок при вычислении индикатора
+	defer func() {
+		if r := recover(); r != nil {
+			res = IndicatorSignal{
+				Changed: false,
+				Value:   false,
+			}
+			err = errors.New(fmt.Sprintf("panic in indicator func: %v", r))
+		}
+	}()
 	convCandles := utils.CandlesToTimeSeries(candles)
 
 	lowerBBI := techan.NewBollingerLowerBandIndicator(techan.NewClosePriceIndicator(convCandles), bb.Window, bb.Sigma)
 	upperBBI := techan.NewBollingerUpperBandIndicator(techan.NewClosePriceIndicator(convCandles), bb.Window, bb.Sigma)
-	calcLower := lowerBBI.Calculate(len(candles)).Float()
-	calcUpper := upperBBI.Calculate(len(candles)).Float()
+	calcLower := lowerBBI.Calculate(len(convCandles.Candles) - 1).Float()
+	calcUpper := upperBBI.Calculate(len(convCandles.Candles) - 1).Float()
 	closePrice := convCandles.LastCandle().ClosePrice.Float()
 
 	//при пробитии ценой нижней границы - покупка
-	if closePrice < calcLower {
-		return true, nil
+	if closePrice <= calcLower {
+		return IndicatorSignal{
+			Changed: true,
+			Value:   true,
+		}, nil
 	}
 
 	//при пробитии ценой верхней границы - продажа
-	if closePrice > calcUpper {
-		return false, nil
+	if closePrice >= calcUpper {
+		return IndicatorSignal{
+			Changed: true,
+			Value:   false,
+		}, nil
 	}
-	return false, errors.New("unknown state of indicator")
+	return IndicatorSignal{
+		Changed: false,
+		Value:   false,
+	}, nil
 }
 
 func (bb *BollingerBands) GetCandleInterval() int {
-	return bb.CandleIntervalInHours
+	return bb.CandleIntervalHours
 }
 
 func (bb *BollingerBands) GetAnalyzeInterval() int {
-	return bb.AnalyzeIntervalInHours
+	return bb.Window
+
 }
 
 func (bb *BollingerBands) GetStrategyParamByString() string {
-	return fmt.Sprintf("Bollinger Bands: CandleIntervalHours: %d AnalyzeIntervalHours: %d Window: %d Sigma %f\n", bb.CandleIntervalInHours, bb.AnalyzeIntervalInHours, bb.Window, bb.Sigma)
+	return fmt.Sprintf("Bollinger Bands: Window: %d Sigma %f CandleIntervalHours: %d\n", bb.Window, bb.Sigma, bb.CandleIntervalHours)
+}
+
+func (bb *BollingerBands) DataPlot(convCandles *techan.TimeSeries) (io.WriterTo, error) {
+	var candleSl []utils.CandleStruct
+	var upperSl []utils.CandleStruct
+	var lowerSl []utils.CandleStruct
+	/*candleSl := make(map[techan.TimePeriod]float64)
+	shortSl := make(map[techan.TimePeriod]float64)
+	longSl := make(map[techan.TimePeriod]float64)*/
+
+	for k, v := range convCandles.Candles {
+		if k < bb.GetAnalyzeInterval() {
+			continue
+		}
+
+		//candlePart = utils.CandlesToTimeSeries(candles[:k])
+		candleSl = append(candleSl, utils.CandleStruct{
+			Period: v.Period,
+			Value:  v.ClosePrice.Float(),
+		})
+		lowerSl = append(lowerSl, utils.CandleStruct{
+			Period: v.Period,
+			Value:  techan.NewBollingerLowerBandIndicator(techan.NewClosePriceIndicator(convCandles), bb.Window, bb.Sigma).Calculate(k).Float(),
+		})
+		upperSl = append(upperSl, utils.CandleStruct{
+			Period: v.Period,
+			Value:  techan.NewBollingerUpperBandIndicator(techan.NewClosePriceIndicator(convCandles), bb.Window, bb.Sigma).Calculate(k).Float(),
+		})
+		/*[v.Period] = v.ClosePrice.Float()
+		shortSl[v.Period] = techan.NewEMAIndicator(techan.NewClosePriceIndicator(convCandles), dema.ShortWindow).Calculate(k).Float()
+		longSl[v.Period] = techan.NewEMAIndicator(techan.NewClosePriceIndicator(convCandles), dema.LongWindow).Calculate(k).Float()*/
+	}
+
+	fmt.Printf("candles\n %v\n", candleSl)
+	fmt.Printf("lower\n %v\n", lowerSl)
+	fmt.Printf("upper\n %v\n", upperSl)
+
+	candleMap := make(map[string][]utils.CandleStruct)
+	candleMap["candles"] = candleSl
+	candleMap["upperEMA"] = upperSl
+	candleMap["lowerEMA"] = lowerSl
+	p, err := utils.CandlesToPlot(candleMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.WriterTo(30*vg.Centimeter, 15*vg.Centimeter, "png")
 }

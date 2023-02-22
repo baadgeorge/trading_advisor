@@ -9,6 +9,6 @@ import (
 const ApiURL = "invest-public-api.tinkoff.ru:443"
 
 func clientConnection() (*grpc.ClientConn, error) {
-	tlsConfig := tls.Config{}
+	tlsConfig := tls.Config{InsecureSkipVerify: true}
 	return grpc.Dial(ApiURL, grpc.WithTransportCredentials(credentials.NewTLS(&tlsConfig)))
 }

@@ -7,6 +7,7 @@ import (
 	"someshit/pkg/sdk"
 	"strconv"
 	"sync"
+	"time"
 )
 
 type WorkersChanges struct {
@@ -33,7 +34,12 @@ type TradeBot struct {
 	accountID         int64
 }
 
-func NewTradeBot(token string, accountID int64) *TradeBot {
+func NewTradeBot(token string, accountID int64) (*TradeBot, error) {
+
+	serv, err := sdk.NewServicePool(token)
+	if err != nil {
+		return nil, err
+	}
 	return &TradeBot{
 		token:             token,
 		botCloseCh:        make(chan struct{}),
@@ -42,12 +48,13 @@ func NewTradeBot(token string, accountID int64) *TradeBot {
 		workersWg:         new(sync.WaitGroup),
 		//ctx:             ctx,
 		workers:     make(map[uint32]*TradeWorker),
-		sdkServices: sdk.NewServicePool(token),
+		sdkServices: serv,
 		logger: logrus.WithFields(logrus.Fields{
+			"time":      time.Now(),
 			"accountID": accountID,
 		}),
 		accountID: accountID,
-	}
+	}, nil
 }
 
 func (tb *TradeBot) StopBot() {

@@ -24,12 +24,12 @@ type TradeWorker struct {
 	strategy       strategy.Strategy
 	indicatorState bool
 	services       *sdk.ServicePool
+	candles        []*proto.HistoricCandle
 	cancelCh       chan struct{}
 }
 
 // TODO sleep
 func NewTradeWorker(workerConfig *WorkerConfig, services *sdk.ServicePool, logger *logrus.Entry) *TradeWorker {
-
 	return &TradeWorker{
 		workerID: workerConfig.workerId,
 		figi:     workerConfig.figi,
@@ -54,14 +54,24 @@ func (tw *TradeWorker) Run(wg *sync.WaitGroup, stateChangesCh chan WorkersChange
 		Description: fmt.Sprintf("Воркер с параметрами %s запущен", tw.GetWorkersDescr()),
 	}
 	var buf bytes.Buffer
+	err := tw.initCandles()
+	if err != nil {
+		stateChangesCh <- WorkersChanges{
+			Img:         nil,
+			WorkerId:    tw.workerID,
+			SignalsType: Err_type,
+			Description: fmt.Sprintf("Ошибка в воркере %d: неудалось загрузить исторические свечи", tw.workerID),
+		}
+		tw.logger.Error(err)
+	}
 
 	tw.logger.Infof("worker %d is running\n", tw.workerID)
 	for {
 		select {
 		case <-time.After(time.Duration(tw.workerSleepSec) * time.Second):
-			if !tw.tradingStatus() {
+			/*if !tw.tradingStatus() {
 				continue
-			}
+			}*/
 			img, ind, err := tw.tradingIndicator()
 			if err != nil {
 				stateChangesCh <- WorkersChanges{
@@ -91,7 +101,7 @@ func (tw *TradeWorker) Run(wg *sync.WaitGroup, stateChangesCh chan WorkersChange
 					Img:         buf.Bytes(),
 					WorkerId:    tw.workerID,
 					SignalsType: Signal_type,
-					Description: fmt.Sprintf("Получен новый сигнал от воркера с параметрами %s: %s",
+					Description: fmt.Sprintf("Получен новый сигнал от воркера с параметрами %s\n %s",
 						tw.GetWorkersDescr(), ind),
 				}
 
@@ -109,25 +119,45 @@ func (tw *TradeWorker) Run(wg *sync.WaitGroup, stateChangesCh chan WorkersChange
 	}
 }
 
-func (tw *TradeWorker) tradingStatus() bool {
-	status, err := tw.services.MarketDataService.GetTradingStatus(tw.figi)
-	if err != nil {
-		tw.logger.Errorf("can't get trading status: %v ", err)
-		return false
+func (tw *TradeWorker) addNewCandles() error {
+	if len(tw.candles) == 0 {
+		return errors.New("Historic candles were not init")
 	}
-	tw.logger.Infof("trading status: %v ", status.TradingStatus.String())
-	return status.TradingStatus == proto.SecurityTradingStatus_SECURITY_TRADING_STATUS_NORMAL_TRADING
+	//fmt.Printf("last %v\n", tw.candles[len(tw.candles)-1].GetTime().AsTime().Local())
+	//fmt.Printf("now %v\n", time.Now())
+	lastCandle := tw.candles[len(tw.candles)-1].GetTime().AsTime().Local()
+	if lastCandle.Sub(time.Now()) < time.Duration(tw.strategy.GetCandleInterval())*time.Hour {
+		return nil
+	}
+	candles, err := tw.services.MarketDataService.GetCandles(tw.figi,
+		lastCandle, time.Now(),
+		time.Duration(tw.strategy.GetCandleInterval())*time.Hour)
+	if err != nil {
+		return err
+	}
+	if len(candles) == 0 {
+		return nil
+	}
+	if len(candles) == 1 && !candles[0].IsComplete {
+		return nil
+	}
+	//если последняя свеча не закрыта, то не добавляем её
+	if !candles[len(candles)-1].IsComplete {
+		tw.candles = append(tw.candles[len(candles):], candles[:len(candles)-1]...)
+		return nil
+	}
+	tw.candles = append(tw.candles[len(candles):], candles...)
+	return nil
 }
 
-const candlePartSize = 30
+const candlePartSize = 23
 
-// доступность сигнала проверяется в Run()
-func (tw *TradeWorker) tradingIndicator() (io.WriterTo, string, error) {
+func (tw *TradeWorker) initCandles() error {
 	interval := tw.strategy.GetAnalyzeInterval()
 	if interval > 400 {
 		tw.logger.Errorf("Too wide interval %d", interval)
 		msg := fmt.Sprintf("Слишком большой интервал для анализа %d", interval)
-		return nil, "", errors.New(msg)
+		return errors.New(msg)
 	}
 
 	var candles []*proto.HistoricCandle
@@ -143,7 +173,7 @@ func (tw *TradeWorker) tradingIndicator() (io.WriterTo, string, error) {
 		if err != nil {
 			tw.logger.Error(err)
 			msg := fmt.Sprint("Ошибка при получении свечей из API")
-			return nil, "", errors.New(msg)
+			return errors.New(msg)
 		}
 		//copy(candlesPartCopy, candlesPart)
 		if len(candles) == 0 {
@@ -168,25 +198,48 @@ func (tw *TradeWorker) tradingIndicator() (io.WriterTo, string, error) {
 		}
 		rightTimePoint = leftTimePoint
 	}
+	tw.candles = candles
+	return nil
+}
 
-	ind, err := tw.strategy.Indicator(candles)
+func (tw *TradeWorker) tradingStatus() bool {
+	status, err := tw.services.MarketDataService.GetTradingStatus(tw.figi)
+	if err != nil {
+		tw.logger.Errorf("can't get trading status: %v ", err)
+		return false
+	}
+	tw.logger.Infof("trading status: %v ", status.TradingStatus.String())
+	return status.TradingStatus == proto.SecurityTradingStatus_SECURITY_TRADING_STATUS_NORMAL_TRADING
+}
+
+// доступность сигнала проверяется в Run()
+func (tw *TradeWorker) tradingIndicator() (io.WriterTo, string, error) {
+
+	err := tw.addNewCandles()
 	if err != nil {
 		tw.logger.Error(err)
-		msg := "can't get indicator"
+		msg := "ошибка при добавлении новых свечей"
+		return nil, "", errors.New(msg)
+	}
+
+	ind, err := tw.strategy.Indicator(tw.candles)
+	if err != nil {
+		tw.logger.Error(err)
+		msg := "ошибка при проверке индикатора"
 		return nil, "", errors.New(msg)
 	}
 
 	resp := ""
 	var img io.WriterTo
 	//если индикатор изменился
-	if tw.indicatorState != ind {
-		tw.indicatorState = ind //изменяем индикатор в экземпляре воркера
-		if ind == true {
+	if tw.indicatorState != ind.Value && ind.Changed == true {
+		tw.indicatorState = ind.Value //изменяем индикатор в экземпляре воркера
+		if ind.Value == true {
 			resp = "ПОКУПКА"
 		} else {
 			resp = "ПРОДАЖА"
 		}
-		img, err = tw.strategy.DataPlot(utils.CandlesToTimeSeries(candles))
+		img, err = tw.strategy.DataPlot(utils.CandlesToTimeSeries(tw.candles))
 	}
 
 	tw.logger.Infof("indiactor status, %t", ind)

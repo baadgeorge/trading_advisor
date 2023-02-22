@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 	"someshit/pkg/proto"
 )
 
@@ -17,11 +18,11 @@ type MarketDataStream struct {
 	stream proto.MarketDataStreamService_MarketDataStreamClient
 }
 
-func NewMarketDataStream(token string) *MarketDataStream {
-	conn, err := clientConnection()
+func NewMarketDataStream(conn *grpc.ClientConn, token string) *MarketDataStream {
+	/*conn, err := clientConnection()
 	if err != nil {
 		logrus.Fatal(err.Error())
-	}
+	}*/
 
 	client := proto.NewMarketDataStreamServiceClient(conn)
 	ctx := createStreamContext(token)

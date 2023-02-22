@@ -1,6 +1,9 @@
 package sdk
 
-import "someshit/pkg/proto"
+import (
+	"google.golang.org/grpc"
+	"someshit/pkg/proto"
+)
 
 type UsersServiceClient interface {
 	// The method of receiving user accounts.
@@ -14,11 +17,8 @@ type UsersService struct {
 	token  string
 }
 
-func NewUsersService(tkn string) *UsersService {
-	conn, err := clientConnection()
-	if err != nil {
-		///loggy.GetLogger().Sugar().Fatal(err.Error())
-	}
+func NewUsersService(conn *grpc.ClientConn, tkn string) *UsersService {
+	//conn, err := clientConnection()
 
 	client := proto.NewUsersServiceClient(conn)
 	return &UsersService{

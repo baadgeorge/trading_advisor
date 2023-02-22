@@ -33,10 +33,9 @@ func (chatbot *telegramChatBot) handleTextMessageAfterCallback(msg *TGApi.Messag
 	}
 	switch chatbot.currChatState.value {
 	case "doubleEMA":
-		err := chatbot.doubleEMA_Arg(msg)
-		return err
+		return chatbot.doubleEMA_Arg(msg)
 	case "bollingerBands":
-		return nil
+		return chatbot.bb_Arg(msg)
 	case "bonds", "etfs", "shares", "futures", "currencies":
 		err := chatbot.get_figi_Arg(msg)
 		return err
@@ -258,10 +257,13 @@ func (chatbot *telegramChatBot) tinkoff_token_Command(msg *TGApi.Message) error 
 }
 
 func (chatbot *telegramChatBot) tinkoff_token_Arg(msg *TGApi.Message) error {
-	new_bot := trade.NewTradeBot(msg.Text, msg.Chat.ID)
+	new_bot, err := trade.NewTradeBot(msg.Text, msg.Chat.ID)
+	if err != nil {
+		return err
+	}
 	if !new_bot.TokenIsValid() {
 		RespMsg := TGApi.NewMessage(msg.Chat.ID, "Неверный токен!")
-		_, err := chatbot.tg.Send(RespMsg)
+		_, err = chatbot.tg.Send(RespMsg)
 		return err
 	}
 	chatbot.tradeBot = new_bot
@@ -269,7 +271,7 @@ func (chatbot *telegramChatBot) tinkoff_token_Arg(msg *TGApi.Message) error {
 	go chatbot.StartBot(msg.Chat.ID)
 	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Бот успешно создан!\n Чтобы отслеживать состояние актива "+
 		"при помощи индикаторов воспользуйтесь командой /new_worker")
-	_, err := chatbot.tg.Send(RespMsg)
+	_, err = chatbot.tg.Send(RespMsg)
 	return err
 }
 

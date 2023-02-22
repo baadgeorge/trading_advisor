@@ -25,7 +25,7 @@ type DoubleEMA struct {
 	WhichEMAHigher bool `reflect:"-"`
 }
 
-func NewDoubleEMA(shortWindow, longWindow, candleInterval, analyzeInterval, offsetShort, offsetLong int) *DoubleEMA {
+func NewDoubleEMA(shortWindow, longWindow, candleInterval, offsetShort, offsetLong int) *DoubleEMA {
 	return &DoubleEMA{
 		ShortWindow:         shortWindow,
 		LongWindow:          longWindow,
@@ -38,41 +38,54 @@ func NewDoubleEMA(shortWindow, longWindow, candleInterval, analyzeInterval, offs
 }
 
 // если longEMA пробивает shortEMA снизу вверх - продажа(false), сверху вниз - покупка(true)
-func (dema *DoubleEMA) Indicator(candles []*proto.HistoricCandle) (res bool, err error) {
+func (dema *DoubleEMA) Indicator(candles []*proto.HistoricCandle) (res IndicatorSignal, err error) {
+	//нужен для обработки ошибок при вычислении индикатора
 	defer func() {
 		if r := recover(); r != nil {
-			res = false
+			res = IndicatorSignal{
+				Changed: false,
+				Value:   false,
+			}
 			err = errors.New(fmt.Sprintf("panic in indicator func: %v", r))
 		}
 	}()
+
 	convCandles := utils.CandlesToTimeSeries(candles)
 	short := techan.NewEMAIndicator(techan.NewClosePriceIndicator(convCandles), dema.ShortWindow)
 	long := techan.NewEMAIndicator(techan.NewClosePriceIndicator(convCandles), dema.LongWindow)
 
-	shortWithOffset := short.Calculate(len(convCandles.Candles) - 1).Float()
-	longWithOffset := long.Calculate(len(convCandles.Candles) - 1).Float()
+	shortCalc := short.Calculate(len(convCandles.Candles) - 1).Float()
+	longCalc := long.Calculate(len(convCandles.Candles) - 1).Float()
 
-	//longEMA пробивает shortEMA сверху вниз
-	if shortWithOffset > longWithOffset && dema.WhichEMAHigher == longEMA {
+	//shortEMA пробивает longEMA сверху вниз
+	if shortCalc > longCalc && dema.WhichEMAHigher == longEMA {
 		dema.WhichEMAHigher = shortEMA
-		return true, nil
+		return IndicatorSignal{
+			Changed: true,
+			Value:   true,
+		}, nil
 	}
-	//longEMA ниже shortEMA и положение не изменилось
-	if shortWithOffset >= longWithOffset && dema.WhichEMAHigher == shortEMA {
+	/*//longEMA ниже shortEMA и положение не изменилось
+	if shortCalc >= longCalc && dema.WhichEMAHigher == shortEMA {
 		return true, nil
-	}
+	}*/
 	//longEMA пробивает shortEMA снизу вверх
-	if longWithOffset > shortWithOffset && dema.WhichEMAHigher == shortEMA {
+	if longCalc > shortCalc && dema.WhichEMAHigher == shortEMA {
 		dema.WhichEMAHigher = longEMA
+		return IndicatorSignal{
+			Changed: true,
+			Value:   false,
+		}, nil
+	}
+	/*//shortEMA ниже longEMA и положение не изменилось
+	if longCalc >= shortCalc && dema.WhichEMAHigher == longEMA {
 		return false, nil
 	}
-	//shortEMA ниже longEMA и положение не изменилось
-	if longWithOffset >= shortWithOffset && dema.WhichEMAHigher == longEMA {
-		return false, nil
-	}
-
-	return false, errors.New(fmt.Sprintf("unknown state of indicator: shortWithOffset: %s, longWithOffset: %s, WhichEMAHigher: %s",
-		shortWithOffset, longWithOffset, dema.WhichEMAHigher))
+	*/
+	return IndicatorSignal{
+		Changed: false,
+		Value:   false,
+	}, nil
 }
 
 func (dema *DoubleEMA) DataPlot(convCandles *techan.TimeSeries) (io.WriterTo, error) {

@@ -35,11 +35,13 @@ func CandlesToTimeSeries(candles []*proto.HistoricCandle) *techan.TimeSeries {
 		if i == len(candles)-1 && !candles[i].IsComplete {
 			break
 		}
-
+		if i == 0 {
+			continue
+		}
 		tc := &techan.Candle{
 			Period: techan.TimePeriod{
-				Start: c.Time.AsTime(),
-				End:   candles[i+1].Time.AsTime(),
+				Start: candles[i-1].Time.AsTime().Local(),
+				End:   c.Time.AsTime().Local(),
 			},
 			Volume:     big.NewFromInt(int(c.Volume)),
 			OpenPrice:  big.NewFromString(fmt.Sprintf("%d.%d", c.Close.Units, abs(c.Close.Nano))),

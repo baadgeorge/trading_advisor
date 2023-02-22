@@ -2,7 +2,7 @@ package sdk
 
 import (
 	"github.com/golang/protobuf/ptypes/timestamp"
-	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 	"someshit/pkg/proto"
 )
 
@@ -44,11 +44,7 @@ type InstrumentsService struct {
 	token  string
 }
 
-func NewInstrumentsService(tkn string) *InstrumentsService {
-	conn, err := clientConnection()
-	if err != nil {
-		logrus.Fatal(err.Error())
-	}
+func NewInstrumentsService(conn *grpc.ClientConn, tkn string) *InstrumentsService {
 
 	client := proto.NewInstrumentsServiceClient(conn)
 	return &InstrumentsService{client: client, token: tkn}

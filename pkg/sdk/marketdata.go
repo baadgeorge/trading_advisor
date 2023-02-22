@@ -3,7 +3,7 @@ package sdk
 import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/timestamp"
-	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"someshit/pkg/proto"
 	"time"
@@ -23,11 +23,7 @@ type MarketDataService struct {
 	token  string
 }
 
-func NewMarketDataService(tkn string) *MarketDataService {
-	conn, err := clientConnection()
-	if err != nil {
-		logrus.Fatal(err.Error())
-	}
+func NewMarketDataService(conn *grpc.ClientConn, tkn string) *MarketDataService {
 
 	client := proto.NewMarketDataServiceClient(conn)
 	return &MarketDataService{client: client, token: tkn}

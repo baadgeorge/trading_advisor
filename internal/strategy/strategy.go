@@ -6,8 +6,13 @@ import (
 	"someshit/pkg/proto"
 )
 
+type IndicatorSignal struct {
+	Changed bool
+	Value   bool
+}
+
 type Strategy interface {
-	Indicator(candles []*proto.HistoricCandle) (bool, error)
+	Indicator(candles []*proto.HistoricCandle) (IndicatorSignal, error)
 	GetCandleInterval() int
 	GetAnalyzeInterval() int
 	GetStrategyParamByString() string
