@@ -1,16 +1,13 @@
 package trade
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"io"
 	"someshit/internal/strategy"
 	"someshit/internal/strategy/utils"
 	"someshit/pkg/proto"
 	"someshit/pkg/sdk"
-	"sync"
 	"time"
 )
 
@@ -19,6 +16,7 @@ import (
 type TradeWorker struct {
 	workerID       uint32
 	figi           string
+	assetsName     string
 	logger         *logrus.Entry
 	workerSleepSec int
 	strategy       strategy.Strategy
@@ -29,10 +27,11 @@ type TradeWorker struct {
 }
 
 // TODO sleep
-func NewTradeWorker(workerConfig *WorkerConfig, services *sdk.ServicePool, logger *logrus.Entry) *TradeWorker {
+func NewTradeWorker(workerConfig *WorkerConfig, services *sdk.ServicePool, logger *logrus.Logger) *TradeWorker {
 	return &TradeWorker{
-		workerID: workerConfig.workerId,
-		figi:     workerConfig.figi,
+		workerID:   workerConfig.workerId,
+		figi:       workerConfig.figi,
+		assetsName: "",
 		logger: logger.WithFields(logrus.Fields{
 			"workerID": workerConfig.workerId,
 			"figi":     workerConfig.figi,
@@ -45,30 +44,59 @@ func NewTradeWorker(workerConfig *WorkerConfig, services *sdk.ServicePool, logge
 	}
 }
 
-func (tw *TradeWorker) Run(wg *sync.WaitGroup, stateChangesCh chan WorkersChanges) {
-	defer wg.Done()
+func (tw *TradeWorker) initData(stateChangesCh chan WorkersChanges) error {
 	stateChangesCh <- WorkersChanges{
 		Img:         nil,
 		WorkerId:    tw.workerID,
 		SignalsType: Info_type,
 		Description: fmt.Sprintf("Воркер с параметрами %s запущен", tw.GetWorkersDescr()),
 	}
-	var buf bytes.Buffer
-	err := tw.initCandles()
+	name, err := tw.GetAssetsNameByFigi()
 	if err != nil {
 		stateChangesCh <- WorkersChanges{
 			Img:         nil,
 			WorkerId:    tw.workerID,
 			SignalsType: Err_type,
-			Description: fmt.Sprintf("Ошибка в воркере %d: неудалось загрузить исторические свечи", tw.workerID),
+			Description: fmt.Sprintf("Ошибка в воркере %d: неудалось загрузить имя актива", tw.workerID),
 		}
 		tw.logger.Error(err)
+		return err
 	}
+	tw.assetsName = name
 
+	err = tw.initCandles()
+	if err != nil {
+		stateChangesCh <- WorkersChanges{
+			Img:         nil,
+			WorkerId:    tw.workerID,
+			SignalsType: Err_type,
+			Description: fmt.Sprintf("Ошибка в воркере %d: %v", tw.workerID, err),
+		}
+		tw.logger.Error(err)
+		return err
+	}
+	return nil
+}
+
+func (tw *TradeWorker) Run(stateChangesCh chan WorkersChanges) {
+	//defer wg.Done()
+
+	count := 0
 	tw.logger.Infof("worker %d is running\n", tw.workerID)
 	for {
 		select {
 		case <-time.After(time.Duration(tw.workerSleepSec) * time.Second):
+
+			if count == 0 {
+				err := tw.initData(stateChangesCh)
+				count++
+				//если есть ошибка, то переходим на след. интерацию цикла, чтобы ее обработать
+				if err != nil {
+					continue
+				}
+			}
+
+			//TODO !!!
 			/*if !tw.tradingStatus() {
 				continue
 			}*/
@@ -85,26 +113,34 @@ func (tw *TradeWorker) Run(wg *sync.WaitGroup, stateChangesCh chan WorkersChange
 			}
 			// посылаем сигнал, только если индикатор изменился(не пустая строка)
 			if ind != "" {
+				//var bytesSl [][]byte
+
+				//buf := make([]bytes.Buffer, len(img))
 				if img != nil {
-					_, err = img.WriteTo(&buf)
-					if err != nil {
-						stateChangesCh <- WorkersChanges{
-							Img:         nil,
-							WorkerId:    tw.workerID,
-							SignalsType: Err_type,
-							Description: fmt.Sprintf("Ошибка в воркере %d: %s", tw.workerID, err),
+					//var buf bytes.Buffer
+					/*for i, v := range img {
+						_, err = v.WriteTo(&buf[i])
+						if err != nil {
+							stateChangesCh <- WorkersChanges{
+								Img:         nil,
+								WorkerId:    tw.workerID,
+								SignalsType: Err_type,
+								Description: fmt.Sprintf("Ошибка в воркере %d: %s", tw.workerID, err),
+							}
+							tw.logger.Error(err)
+							continue
 						}
-						tw.logger.Error(err)
+
+						bytesSl = append(bytesSl, buf[i].Bytes())
+					}*/
+					stateChangesCh <- WorkersChanges{
+						Img:         img,
+						WorkerId:    tw.workerID,
+						SignalsType: Signal_type,
+						Description: fmt.Sprintf("Получен новый сигнал от воркера с параметрами %s\n %v",
+							tw.GetWorkersDescr(), ind),
 					}
 				}
-				stateChangesCh <- WorkersChanges{
-					Img:         buf.Bytes(),
-					WorkerId:    tw.workerID,
-					SignalsType: Signal_type,
-					Description: fmt.Sprintf("Получен новый сигнал от воркера с параметрами %s\n %s",
-						tw.GetWorkersDescr(), ind),
-				}
-
 			}
 		case <-tw.cancelCh:
 			stateChangesCh <- WorkersChanges{
@@ -193,7 +229,7 @@ func (tw *TradeWorker) initCandles() error {
 			}*/
 
 		//нужно загрузить свечей в 2 раза больше, чем окно, для красивого графика =)
-		if len(candles) >= 2*interval {
+		if len(candles) > 2*interval {
 			break
 		}
 		rightTimePoint = leftTimePoint
@@ -213,7 +249,7 @@ func (tw *TradeWorker) tradingStatus() bool {
 }
 
 // доступность сигнала проверяется в Run()
-func (tw *TradeWorker) tradingIndicator() (io.WriterTo, string, error) {
+func (tw *TradeWorker) tradingIndicator() ([][]byte, string, error) {
 
 	err := tw.addNewCandles()
 	if err != nil {
@@ -230,15 +266,19 @@ func (tw *TradeWorker) tradingIndicator() (io.WriterTo, string, error) {
 	}
 
 	resp := ""
-	var img io.WriterTo
+	var img [][]byte
+
+	//TODO !!!!!
 	//если индикатор изменился
-	if tw.indicatorState != ind.Value && ind.Changed == true {
+	//if tw.indicatorState != ind.Value && ind.Changed == true {
+	if tw.indicatorState == false {
 		tw.indicatorState = ind.Value //изменяем индикатор в экземпляре воркера
 		if ind.Value == true {
 			resp = "ПОКУПКА"
 		} else {
 			resp = "ПРОДАЖА"
 		}
+
 		img, err = tw.strategy.DataPlot(utils.CandlesToTimeSeries(tw.candles))
 	}
 
@@ -247,7 +287,7 @@ func (tw *TradeWorker) tradingIndicator() (io.WriterTo, string, error) {
 }
 
 func (tw *TradeWorker) GetWorkersDescr() string {
-	return fmt.Sprintf("worker id: %d strategy: %s", tw.workerID, tw.strategy.GetStrategyParamByString())
+	return fmt.Sprintf("worker id: %d figi: %s, assets name: %s, strategy %s", tw.workerID, tw.figi, tw.assetsName, tw.strategy.GetStrategyParamByString())
 }
 
 func (tw *TradeWorker) GetWorkerID() uint32 {
@@ -256,4 +296,17 @@ func (tw *TradeWorker) GetWorkerID() uint32 {
 
 func (tw *TradeWorker) GetWorkerCancelCh() chan struct{} {
 	return tw.cancelCh
+}
+
+func (tw *TradeWorker) GetAssetsNameByFigi() (string, error) {
+
+	tmp, err := tw.services.InstrumentsService.GetInstrumentBy(
+		proto.InstrumentRequest{
+			IdType: proto.InstrumentIdType_INSTRUMENT_ID_TYPE_FIGI,
+			Id:     tw.figi,
+		})
+	if err != nil {
+		return "", err
+	}
+	return tmp.Name, nil
 }

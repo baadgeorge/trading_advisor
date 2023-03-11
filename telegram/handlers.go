@@ -36,6 +36,10 @@ func (chatbot *telegramChatBot) handleTextMessageAfterCallback(msg *TGApi.Messag
 		return chatbot.doubleEMA_Arg(msg)
 	case "bollingerBands":
 		return chatbot.bb_Arg(msg)
+	case "macd":
+		return chatbot.macd_Arg(msg)
+	case "rsi":
+		return chatbot.rsi_Arg(msg)
 	case "bonds", "etfs", "shares", "futures", "currencies":
 		err := chatbot.get_figi_Arg(msg)
 		return err
@@ -276,9 +280,13 @@ func (chatbot *telegramChatBot) tinkoff_token_Arg(msg *TGApi.Message) error {
 }
 
 // NEW_WORKER
-var indicatorKeyboard = TGApi.NewInlineKeyboardMarkup(TGApi.NewInlineKeyboardRow(
-	TGApi.NewInlineKeyboardButtonData("doubleEMA", "doubleEMA"),
-	TGApi.NewInlineKeyboardButtonData("bollingerBands", "bollingerBands")))
+var indicatorKeyboard = TGApi.NewInlineKeyboardMarkup(
+	TGApi.NewInlineKeyboardRow(
+		TGApi.NewInlineKeyboardButtonData("DoubleEMA", "doubleEMA"),
+		TGApi.NewInlineKeyboardButtonData("MACD", "macd")),
+	TGApi.NewInlineKeyboardRow(
+		TGApi.NewInlineKeyboardButtonData("BollingerBands", "bollingerBands"),
+		TGApi.NewInlineKeyboardButtonData("RSI", "rsi")))
 
 func (chatbot *telegramChatBot) new_worker_Command(msg *TGApi.Message) error {
 	/*buttons := TGApi.NewKeyboardButtonRow()
@@ -301,6 +309,10 @@ func (chatbot *telegramChatBot) new_worker_callback(callback *TGApi.CallbackQuer
 		strat_fields = GetStrategyFieldsFromStruct(strategy.BollingerBands{})
 	case "doubleEMA":
 		strat_fields = GetStrategyFieldsFromStruct(strategy.DoubleEMA{})
+	case "macd":
+		strat_fields = GetStrategyFieldsFromStruct(strategy.MACD{})
+	case "rsi":
+		strat_fields = GetStrategyFieldsFromStruct(strategy.RSI{})
 	}
 
 	var strat_fields_by_string string

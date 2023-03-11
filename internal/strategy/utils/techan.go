@@ -7,7 +7,7 @@ import (
 	"someshit/pkg/proto"
 )
 
-type CandleStruct struct {
+type PlotItemStruct struct {
 	Period techan.TimePeriod
 	Value  float64
 }

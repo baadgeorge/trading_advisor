@@ -30,7 +30,7 @@ func (chatbot *telegramChatBot) ListenNewUpdates() {
 		case upd := <-chatbot.newUpdatesCh:
 			err := chatbot.UpdateHandler(upd)
 			if err != nil {
-				chatbot.logger.Error()
+				chatbot.logger.Error(err)
 			}
 		case <-chatbot.closeUpdateListenerCh:
 			return
@@ -52,16 +52,18 @@ func (chatbot *telegramChatBot) ListenSignalsFromTinkoffBot(id int64) {
 				chatbot.logger.Error(err)
 			}
 			if signal.Img != nil {
+				for _, k := range signal.Img {
+					photo := TGApi.FileBytes{
+						Name:  fmt.Sprintf("График от %d", signal.WorkerId),
+						Bytes: k,
+					}
+					ph := TGApi.NewPhoto(id, photo)
+					_, err = chatbot.tg.Send(ph)
+					if err != nil {
+						chatbot.logger.Error(err)
+					}
+				}
 
-				photo := TGApi.FileBytes{
-					Name:  fmt.Sprintf("График от %d", signal.WorkerId),
-					Bytes: signal.Img,
-				}
-				ph := TGApi.NewPhoto(id, photo)
-				_, err = chatbot.tg.Send(ph)
-				if err != nil {
-					chatbot.logger.Error(err)
-				}
 			}
 
 		case <-chatbot.closeSignalsListenerCh:
@@ -104,7 +106,7 @@ func (chatbot *telegramChatBot) UpdateHandler(update TGApi.Update) error {
 
 			//запускаем обработчик команды
 			if err := chatbot.handleCommands(update.Message); err != nil {
-				chatbot.logger.Error(err)
+				//chatbot.logger.Error(err)
 				return err
 			}
 		} else {
@@ -113,7 +115,7 @@ func (chatbot *telegramChatBot) UpdateHandler(update TGApi.Update) error {
 				msg := TGApi.NewMessage(update.Message.Chat.ID, "Сначала введите команду")
 				_, err := chatbot.tg.Send(msg)
 				if err != nil {
-					chatbot.logger.Error(err)
+					//chatbot.logger.Error(err)
 					return err
 				}
 				return nil
@@ -122,7 +124,7 @@ func (chatbot *telegramChatBot) UpdateHandler(update TGApi.Update) error {
 			if chatbot.currChatState.isCommand {
 				err := chatbot.handleTextMessageAfterCommand(update.Message)
 				if err != nil {
-					chatbot.logger.Error(err)
+					//chatbot.logger.Error(err)
 					return err
 				}
 
@@ -130,19 +132,18 @@ func (chatbot *telegramChatBot) UpdateHandler(update TGApi.Update) error {
 			} else if chatbot.currChatState.isCallback {
 				err := chatbot.handleTextMessageAfterCallback(update.Message)
 				if err != nil {
-					chatbot.logger.Error(err)
+					//chatbot.logger.Error(err)
 					return err
 				}
 
 			}
 
 		}
-
 		//если обновление - callback
-	} else if update.CallbackQuery != nil {
+	} else if update.CallbackQuery != nil && chatbot.currChatState != nil {
 		err := chatbot.handleCallbackUpdate(update.FromChat().ID, update.CallbackQuery)
 		if err != nil {
-			chatbot.logger.Error(err)
+			//chatbot.logger.Error(err)
 			return err
 		}
 	}

@@ -32,11 +32,13 @@ func (tgBot *TelegramBot) StartTelegramUpdates() error {
 		if chatBot, ok := tgBot.telegramChatBot[update.FromChat().ID]; ok {
 			chatBot.GetUpdateCh() <- update
 		} else {
+			log := logrus.New()
+			log.SetReportCaller(true)
 			tgBot.telegramChatBot[update.FromChat().ID] = &telegramChatBot{
 				tg:                     tgBot.telegramBot,
 				tradeBot:               nil,
 				currChatState:          nil,
-				logger:                 logrus.New(),
+				logger:                 log,
 				newUpdatesCh:           make(chan TGApi.Update),
 				closeUpdateListenerCh:  make(chan struct{}),
 				closeSignalsListenerCh: make(chan struct{}),

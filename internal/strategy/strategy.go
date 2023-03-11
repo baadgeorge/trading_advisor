@@ -2,7 +2,6 @@ package strategy
 
 import (
 	"github.com/sdcoffey/techan"
-	"io"
 	"someshit/pkg/proto"
 )
 
@@ -16,5 +15,5 @@ type Strategy interface {
 	GetCandleInterval() int
 	GetAnalyzeInterval() int
 	GetStrategyParamByString() string
-	DataPlot(*techan.TimeSeries) (io.WriterTo, error)
+	DataPlot(*techan.TimeSeries) ([][]byte, error)
 }

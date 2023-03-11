@@ -1,11 +1,14 @@
 package utils
 
 import (
+	"bytes"
+	"github.com/pplcc/plotext"
 	"go-hep.org/x/hep/hplot"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
 	"gonum.org/v1/plot/vg/draw"
+	"gonum.org/v1/plot/vg/vgimg"
 	"image/color"
 	"time"
 )
@@ -60,8 +63,10 @@ func CustomXAxis(names []string, p *plot.Plot) *plot.Plot {
 	return p
 }
 
-func CandlesToPlot(plots map[string][]CandleStruct) (*plot.Plot, error) {
+func PlotData(plots map[string][]PlotItemStruct, xName, yName, title string) ([]byte, error) {
 	p := plot.New()
+	p.Title.Text = title
+
 	//xticks := plot.TimeTicks{Format: "2006-01-02\n15:04"}
 	//Format: "2006-01-02\n15:04"}
 	//Time:   plot.UnixTimeIn(time.Local)}
@@ -77,8 +82,13 @@ func CandlesToPlot(plots map[string][]CandleStruct) (*plot.Plot, error) {
 	//grid := plotter.NewGrid()
 	p.Add(plotter.NewGrid())
 	//p.Title.Text =.
-	p.X.Label.Text = "Date"
-	p.Y.Label.Text = "Price"
+	p.X.Label.Text = xName
+	p.Y.Label.Text = yName
+	pl := plot.New()
+	pl.HideX()
+	pl.HideY()
+	pl.Legend = plot.NewLegend()
+	pl.Legend.Left = true
 
 	count := 0
 
@@ -123,13 +133,38 @@ func CandlesToPlot(plots map[string][]CandleStruct) (*plot.Plot, error) {
 
 		//leg.Add(name, line)
 		//p.Legend = leg
-
-		p.Legend.Add(name, line)
+		pl.Legend.Add(name, line)
+		//p.Legend.Add(name, line)
 		//p.Legend.Padding = vg.Length(5)
 
 	}
-	//p.Legend.Rectangle()
-	p.Legend.XOffs = vg.Length(-5)
+
+	table := plotext.Table{
+		RowHeights: []float64{20, 1},
+		ColWidths:  []float64{1},
+	}
+	plts := [][]*plot.Plot{{p}, {pl}}
+
+	img := vgimg.New(800, 400)
+	dc := draw.New(img)
+	canvases := table.Align(plts, dc)
+	plts[0][0].Draw(canvases[0][0])
+	plts[1][0].Draw(canvases[1][0])
+	png := vgimg.PngCanvas{Canvas: img}
+	/*	w, err := os.Create("test.png")
+		if err != nil {
+			return nil, err
+		}
+		_, err = png.WriteTo(w)
+		if err != nil {
+			return nil, err
+		}*/
+	buf := new(bytes.Buffer)
+	_, err := png.WriteTo(buf)
+	if err != nil {
+		return nil, err
+	}
+	//p.Legend.XOffs = vg.Length(-5)
 	//err = p.Save(10*vg.Centimeter, 5*vg.Centimeter, "timeseries.png")
 
 	/*//TODO
@@ -137,5 +172,5 @@ func CandlesToPlot(plots map[string][]CandleStruct) (*plot.Plot, error) {
 		panic(err)
 
 	}*/
-	return p, nil
+	return buf.Bytes(), nil
 }

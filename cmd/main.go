@@ -2,22 +2,30 @@ package main
 
 import (
 	TGApi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
+	"os"
 	"someshit/telegram"
 )
 
 func main() {
-
+	if err := godotenv.Load("/Users/george/go/GolandProjects/someshit/telegram.env"); err != nil {
+		logrus.Fatalf("can't load env: %s", err.Error())
+		return
+	}
 	//instr := sdk.NewServicePool("t.LCgR7EtlcOlfRM1epjYTV0Z9bF2gqeGZhUH831L8vUBb0-LH6EuIXEW5o6k4XKmpA7vPVw39hU02de1Mhcv-yw")
-	botAPI, err := TGApi.NewBotAPI("5912554882:AAGYEW5VMBe9xe6hBbM3lEhaINeG84QPHvY")
+	botAPI, err := TGApi.NewBotAPI(os.Getenv("BOT_TOKEN"))
 	if err != nil {
 		panic(err)
 	}
+	log := logrus.New()
+	log.SetReportCaller(true)
 	bot := telegram.NewBot(botAPI)
 	err = bot.StartTelegramUpdates()
 
 	if err != nil {
-		logrus.Warn(err)
+		logrus.Fatal(err)
+		return
 	}
 
 }

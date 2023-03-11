@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sdcoffey/techan"
-	"gonum.org/v1/plot/vg"
-	"io"
 	"someshit/internal/strategy/utils"
 	"someshit/pkg/proto"
 )
@@ -82,10 +80,11 @@ func (bb *BollingerBands) GetStrategyParamByString() string {
 	return fmt.Sprintf("Bollinger Bands: Window: %d Sigma %f CandleIntervalHours: %d\n", bb.Window, bb.Sigma, bb.CandleIntervalHours)
 }
 
-func (bb *BollingerBands) DataPlot(convCandles *techan.TimeSeries) (io.WriterTo, error) {
-	var candleSl []utils.CandleStruct
-	var upperSl []utils.CandleStruct
-	var lowerSl []utils.CandleStruct
+func (bb *BollingerBands) DataPlot(convCandles *techan.TimeSeries) ([][]byte, error) {
+	var candleSl []utils.PlotItemStruct
+	var upperSl []utils.PlotItemStruct
+	var lowerSl []utils.PlotItemStruct
+	var dataPlots [][]byte
 	/*candleSl := make(map[techan.TimePeriod]float64)
 	shortSl := make(map[techan.TimePeriod]float64)
 	longSl := make(map[techan.TimePeriod]float64)*/
@@ -96,15 +95,15 @@ func (bb *BollingerBands) DataPlot(convCandles *techan.TimeSeries) (io.WriterTo,
 		}
 
 		//candlePart = utils.CandlesToTimeSeries(candles[:k])
-		candleSl = append(candleSl, utils.CandleStruct{
+		candleSl = append(candleSl, utils.PlotItemStruct{
 			Period: v.Period,
 			Value:  v.ClosePrice.Float(),
 		})
-		lowerSl = append(lowerSl, utils.CandleStruct{
+		lowerSl = append(lowerSl, utils.PlotItemStruct{
 			Period: v.Period,
 			Value:  techan.NewBollingerLowerBandIndicator(techan.NewClosePriceIndicator(convCandles), bb.Window, bb.Sigma).Calculate(k).Float(),
 		})
-		upperSl = append(upperSl, utils.CandleStruct{
+		upperSl = append(upperSl, utils.PlotItemStruct{
 			Period: v.Period,
 			Value:  techan.NewBollingerUpperBandIndicator(techan.NewClosePriceIndicator(convCandles), bb.Window, bb.Sigma).Calculate(k).Float(),
 		})
@@ -117,14 +116,20 @@ func (bb *BollingerBands) DataPlot(convCandles *techan.TimeSeries) (io.WriterTo,
 	fmt.Printf("lower\n %v\n", lowerSl)
 	fmt.Printf("upper\n %v\n", upperSl)
 
-	candleMap := make(map[string][]utils.CandleStruct)
+	candleMap := make(map[string][]utils.PlotItemStruct)
 	candleMap["candles"] = candleSl
 	candleMap["upperEMA"] = upperSl
 	candleMap["lowerEMA"] = lowerSl
-	p, err := utils.CandlesToPlot(candleMap)
+	p, err := utils.PlotData(candleMap, "time", "price", "Bollinger Bands")
 	if err != nil {
 		return nil, err
 	}
 
-	return p.WriterTo(30*vg.Centimeter, 15*vg.Centimeter, "png")
+	/*k, err := p.WriterTo(30*vg.Centimeter, 15*vg.Centimeter, "png")
+	if err != nil {
+		return nil, err
+	}*/
+	dataPlots = append(dataPlots, p)
+
+	return dataPlots, nil
 }

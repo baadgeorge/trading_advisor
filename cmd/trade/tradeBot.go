@@ -11,7 +11,7 @@ import (
 )
 
 type WorkersChanges struct {
-	Img         []byte
+	Img         [][]byte
 	WorkerId    uint32
 	SignalsType State
 	Description string
@@ -30,7 +30,7 @@ type TradeBot struct {
 	workersWg         *sync.WaitGroup
 	workers           map[uint32]*TradeWorker
 	sdkServices       *sdk.ServicePool
-	logger            *logrus.Entry
+	logger            *logrus.Logger
 	accountID         int64
 }
 
@@ -40,6 +40,12 @@ func NewTradeBot(token string, accountID int64) (*TradeBot, error) {
 	if err != nil {
 		return nil, err
 	}
+	log := logrus.New()
+	log.SetReportCaller(true)
+	log.WithFields(logrus.Fields{
+		"time":      time.Now(),
+		"accountID": accountID,
+	})
 	return &TradeBot{
 		token:             token,
 		botCloseCh:        make(chan struct{}),
@@ -49,11 +55,8 @@ func NewTradeBot(token string, accountID int64) (*TradeBot, error) {
 		//ctx:             ctx,
 		workers:     make(map[uint32]*TradeWorker),
 		sdkServices: serv,
-		logger: logrus.WithFields(logrus.Fields{
-			"time":      time.Now(),
-			"accountID": accountID,
-		}),
-		accountID: accountID,
+		logger:      log,
+		accountID:   accountID,
 	}, nil
 }
 
@@ -72,8 +75,8 @@ func (tb *TradeBot) StartNewWorkers() {
 		case config := <-tb.newWorkerConfigCh:
 			worker := NewTradeWorker(config, tb.sdkServices, tb.logger)
 			tb.workers[worker.workerID] = worker
-			tb.workersWg.Add(1)
-			go worker.Run(tb.workersWg, tb.workersChangesCh)
+			//tb.workersWg.Add(1)
+			go worker.Run(tb.workersChangesCh)
 		case <-tb.botCloseCh:
 			for k := range tb.workers {
 				tb.StopWorker(k)

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sdcoffey/techan"
-	"gonum.org/v1/plot/vg"
-	"io"
 	"someshit/internal/strategy/utils"
 	"someshit/pkg/proto"
 )
@@ -88,29 +86,31 @@ func (dema *DoubleEMA) Indicator(candles []*proto.HistoricCandle) (res Indicator
 	}, nil
 }
 
-func (dema *DoubleEMA) DataPlot(convCandles *techan.TimeSeries) (io.WriterTo, error) {
-	var candleSl []utils.CandleStruct
-	var shortSl []utils.CandleStruct
-	var longSl []utils.CandleStruct
+func (dema *DoubleEMA) DataPlot(convCandles *techan.TimeSeries) ([][]byte, error) {
+	var candleSl []utils.PlotItemStruct
+	var shortSl []utils.PlotItemStruct
+	var longSl []utils.PlotItemStruct
+	var dataPlots [][]byte
 	/*candleSl := make(map[techan.TimePeriod]float64)
 	shortSl := make(map[techan.TimePeriod]float64)
 	longSl := make(map[techan.TimePeriod]float64)*/
 
+	//TODO for
 	for k, v := range convCandles.Candles {
 		if k < dema.GetAnalyzeInterval() {
 			continue
 		}
 
 		//candlePart = utils.CandlesToTimeSeries(candles[:k])
-		candleSl = append(candleSl, utils.CandleStruct{
+		candleSl = append(candleSl, utils.PlotItemStruct{
 			Period: v.Period,
 			Value:  v.ClosePrice.Float(),
 		})
-		shortSl = append(shortSl, utils.CandleStruct{
+		shortSl = append(shortSl, utils.PlotItemStruct{
 			Period: v.Period,
 			Value:  techan.NewEMAIndicator(techan.NewClosePriceIndicator(convCandles), dema.ShortWindow).Calculate(k).Float(),
 		})
-		longSl = append(longSl, utils.CandleStruct{
+		longSl = append(longSl, utils.PlotItemStruct{
 			Period: v.Period,
 			Value:  techan.NewEMAIndicator(techan.NewClosePriceIndicator(convCandles), dema.LongWindow).Calculate(k).Float(),
 		})
@@ -123,16 +123,17 @@ func (dema *DoubleEMA) DataPlot(convCandles *techan.TimeSeries) (io.WriterTo, er
 	fmt.Printf("short\n %v\n", shortSl)
 	fmt.Printf("long\n %v\n", longSl)
 
-	candleMap := make(map[string][]utils.CandleStruct)
+	candleMap := make(map[string][]utils.PlotItemStruct)
 	candleMap["candles"] = candleSl
 	candleMap["shortEMA"] = shortSl
 	candleMap["longEMA"] = longSl
-	p, err := utils.CandlesToPlot(candleMap)
+	p, err := utils.PlotData(candleMap, "time", "price", "Double EMA")
 	if err != nil {
 		return nil, err
 	}
 
-	return p.WriterTo(30*vg.Centimeter, 15*vg.Centimeter, "png")
+	dataPlots = append(dataPlots, p)
+	return dataPlots, nil
 
 }
 
