@@ -2,14 +2,62 @@ package telegram
 
 import (
 	"errors"
+	"final/internal/strategy"
+	"final/internal/trade"
 	"fmt"
 	TGApi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"someshit/cmd/trade"
-	"someshit/internal/strategy"
 	"strings"
 )
 
 // HANDLERS
+// обработчик команд
+func (chatbot *telegramChatBot) handleCommands(msg *TGApi.Message) error {
+	if chatbot.tradeBot == nil {
+		switch msg.Command() {
+		case "start":
+			return chatbot.start_Command(msg)
+		case "tinkoff_token":
+			return chatbot.tinkoff_token_Command(msg)
+		case "help":
+			return chatbot.help_Command(msg)
+		default:
+			resp := TGApi.NewMessage(msg.Chat.ID, "Для начала работы с ботом"+
+				" необходимо ввести токен из Тинькофф Инвестиций.\n Воспользуйтесь /tinkoff_token")
+			_, err := chatbot.tg.Send(resp)
+			return err
+		}
+	} else {
+		switch msg.Command() {
+		case "start":
+			resp := TGApi.NewMessage(msg.Chat.ID, "Бот уже запущен")
+			_, err := chatbot.tg.Send(resp)
+			return err
+		case "tinkoff_token":
+			resp := TGApi.NewMessage(msg.Chat.ID, "Токен уже введен")
+			_, err := chatbot.tg.Send(resp)
+			return err
+		case "worker_list":
+			return chatbot.worker_list_Command(msg)
+		case "new_worker":
+			//только комнада /tinkoff_token_Arg добавляет пользователя(бота)
+			return chatbot.new_worker_Command(msg)
+		case "stop_worker":
+			return chatbot.stop_worker_Command(msg)
+		case "delete_bot":
+			return chatbot.delete_bot_Command(msg)
+		case "help":
+			return chatbot.help_Command(msg)
+		case "get_figi":
+			return chatbot.get_figi_Command(msg)
+		default:
+			resp := TGApi.NewMessage(msg.Chat.ID, "Неизвестная команда")
+			_, err := chatbot.tg.Send(resp)
+			return err
+		}
+	}
+}
+
+// обратботчик ответов на команды(которые их подразумевают)
 func (chatbot *telegramChatBot) handleTextMessageAfterCommand(msg *TGApi.Message) error {
 	switch chatbot.currChatState.value {
 	case "tinkoff_token":
@@ -25,6 +73,47 @@ func (chatbot *telegramChatBot) handleTextMessageAfterCommand(msg *TGApi.Message
 	}
 }
 
+// обработчик callback
+func (chatbot *telegramChatBot) handleCallback(chatId int64, callbackQuery *TGApi.CallbackQuery) error {
+	callback := TGApi.NewCallback(callbackQuery.ID, callbackQuery.Data)
+	if _, err := chatbot.tg.Request(callback); err != nil {
+		return err
+	}
+	if chatbot.tradeBot == nil {
+		resp := TGApi.NewMessage(chatId, "Сначала нужно создать бота! Воспользуйтесь командой /start")
+		_, err := chatbot.tg.Send(resp)
+		return err
+	}
+	switch chatbot.currChatState.value {
+	case "get_figi":
+		//fmt.Print(callbackQuery.Data)
+		err := chatbot.figiCallback(callbackQuery)
+		if err != nil {
+			//chatbot.logger.Warn(err)
+			return err
+		}
+		return nil
+	case "new_worker":
+		//fmt.Print(callbackQuery.Data)
+		err := chatbot.new_worker_callback(callbackQuery)
+		if err != nil {
+			//chatbot.logger.Warn(err)
+			return err
+		}
+		return nil
+	case "delete_bot":
+		err := chatbot.delete_bot_Callback(callbackQuery)
+		if err != nil {
+			//chatbot.logger.Warn(err)
+			return err
+		}
+		return nil
+	default:
+		return errors.New("unknown callback")
+	}
+}
+
+// обработчик выбранных ответов в callback
 func (chatbot *telegramChatBot) handleTextMessageAfterCallback(msg *TGApi.Message) error {
 	if chatbot.tradeBot == nil {
 		resp := TGApi.NewMessage(msg.Chat.ID, "Сначала нужно ввести токен! Воспользуйтесь командой /tinkoff_token")
@@ -48,172 +137,45 @@ func (chatbot *telegramChatBot) handleTextMessageAfterCallback(msg *TGApi.Messag
 	}
 }
 
-func (chatbot *telegramChatBot) handleCommands(msg *TGApi.Message) error {
-	switch msg.Command() {
-	case "start":
-		return chatbot.start_Command(msg)
-	case "tinkoff_token":
-		return chatbot.tinkoff_token_Command(msg)
-	case "worker_list":
-		if chatbot.tradeBot == nil {
-			resp := TGApi.NewMessage(msg.Chat.ID, "Сначала нужно ввести токен! Воспользуйтесь командой /tinkoff_token")
-			_, err := chatbot.tg.Send(resp)
-			return err
-		}
-		return chatbot.worker_list_Command(msg)
-	case "new_worker":
-		//только комнада /tinkoff_token_Arg добавляет пользователя(бота)
-		if chatbot.tradeBot == nil {
-			resp := TGApi.NewMessage(msg.Chat.ID, "Сначала нужно ввести токен! Воспользуйтесь командой /tinkoff_token")
-			_, err := chatbot.tg.Send(resp)
-			return err
-		}
-		return chatbot.new_worker_Command(msg)
-	case "stop_worker":
-		if chatbot.tradeBot == nil {
-			resp := TGApi.NewMessage(msg.Chat.ID, "Сначала нужно ввести токен! Воспользуйтесь командой /tinkoff_token")
-			_, err := chatbot.tg.Send(resp)
-			return err
-		}
-		return chatbot.stop_worker_Command(msg)
-	case "delete_bot":
-		return chatbot.delete_bot_Command(msg)
-	case "help":
-		return nil
-	case "get_figi":
-		if chatbot.tradeBot == nil {
-			resp := TGApi.NewMessage(msg.Chat.ID, "Сначала нужно ввести токен! Воспользуйтесь командой /tinkoff_token")
-			_, err := chatbot.tg.Send(resp)
-			return err
-		}
-		return chatbot.get_figi_Command(msg)
-	default:
-		resp := TGApi.NewMessage(msg.Chat.ID, "Неизвестная команда")
-		_, err := chatbot.tg.Send(resp)
-		return err
-	}
-}
-
-func (chatbot *telegramChatBot) handleCallbackUpdate(chatId int64, callbackQuery *TGApi.CallbackQuery) error {
-	callback := TGApi.NewCallback(callbackQuery.ID, callbackQuery.Data)
-	if _, err := chatbot.tg.Request(callback); err != nil {
-		chatbot.logger.Warn(err)
-	}
-	switch chatbot.currChatState.value {
-	case "get_figi":
-		if chatbot.tradeBot == nil {
-			resp := TGApi.NewMessage(chatId, "Сначала нужно ввести токен! Воспользуйтесь командой /tinkoff_token")
-			_, err := chatbot.tg.Send(resp)
-			return err
-		}
-		entry := chatbot.currChatState
-		entry.isCallback = true
-		entry.isCommand = false
-		entry.value = callbackQuery.Data
-
-		fmt.Print(callbackQuery.Data)
-		//нужна функция которая возьмет выбор из дата и запросит данные для соответствующей стратегии
-		err := chatbot.figiCallback(callbackQuery)
-		if err != nil {
-			chatbot.logger.Warn(err)
-			return err
-		}
-		return nil
-	case "new_worker":
-		if chatbot.tradeBot == nil {
-			resp := TGApi.NewMessage(chatId, "Сначала нужно ввести токен! Воспользуйтесь командой /tinkoff_token")
-			_, err := chatbot.tg.Send(resp)
-			return err
-		}
-		entry := chatbot.currChatState
-		entry.isCallback = true
-		entry.isCommand = false
-		entry.value = callbackQuery.Data
-
-		fmt.Print(callbackQuery.Data)
-		//нужна функция которая возьмет выбор из дата и запросит данные для соответствующей стратегии
-		err := chatbot.new_worker_callback(callbackQuery)
-		if err != nil {
-			chatbot.logger.Warn(err)
-			return err
-		}
-		return nil
-	case "delete_bot":
-		entry := chatbot.currChatState
-		entry.isCallback = true
-		entry.isCommand = false
-		entry.value = callbackQuery.Data
-		chatbot.currChatState = entry
-		err := chatbot.delete_botCallback(callbackQuery)
-		if err != nil {
-			chatbot.logger.Warn(err)
-			return err
-		}
-		return nil
-	default:
-		return errors.New("unknown callback")
-	}
-
-}
-
-var deleteKeyboard = TGApi.NewInlineKeyboardMarkup(TGApi.NewInlineKeyboardRow(
-	TGApi.NewInlineKeyboardButtonData("удалить", "delete"),
-	TGApi.NewInlineKeyboardButtonData("отмена", "cancel")))
-
-func (chatbot *telegramChatBot) delete_bot_Command(msg *TGApi.Message) error {
-	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Вы действительно хотите удалить бота?")
-	RespMsg.ReplyMarkup = deleteKeyboard
+// START
+// обработчик крманды старта бота
+func (chatbot *telegramChatBot) start_Command(msg *TGApi.Message) error {
+	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Привет! Это бот для Тинкофф Инвестиций.\n"+
+		"Сначала необходимо получить в личном кабинете Тинькофф Инвестиций токен только для чтения. "+
+		"Для передачи его боту воспользуйтесь командой /tinkoff_token")
 	_, err := chatbot.tg.Send(RespMsg)
 	return err
 }
 
-func (chatbot *telegramChatBot) delete_botCallback(callback *TGApi.CallbackQuery) error {
-	switch callback.Data {
-	case "delete":
-		if chatbot.tradeBot != nil {
-			chatbot.StopTinkoffBot(callback.Message.Chat.ID)
-			//delete(bot.signalsCh, callback.Message.Chat.ID)
-			RespMsg := TGApi.NewMessage(callback.Message.Chat.ID, "Бот остановлен")
-			_, err := chatbot.tg.Send(RespMsg)
-			return err
-		} else {
-			RespMsg := TGApi.NewMessage(callback.Message.Chat.ID, "Бот остановлен")
-			_, err := chatbot.tg.Send(RespMsg)
-			return err
-		}
-
-	case "cancel":
-		RespMsg := TGApi.NewMessage(callback.Message.Chat.ID, "Удаление бота отменено ")
-		_, err := chatbot.tg.Send(RespMsg)
-		return err
-	default:
-		return errors.New("unknown callback")
-	}
-}
-
-func (chatbot *telegramChatBot) stop_worker_Command(msg *TGApi.Message) error {
-	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Введите id воркера, который необходимо остановить. "+
-		"Чтобы получить список запущенных воркеров воспользуйтесь коммандой /worker_list")
+// TINKOFF_TOKEN
+// обработчик команды на ввод токена
+func (chatbot *telegramChatBot) tinkoff_token_Command(msg *TGApi.Message) error {
+	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Введите токен из Тинькофф Инвестиций")
 	_, err := chatbot.tg.Send(RespMsg)
 	return err
 }
 
-func (chatbot *telegramChatBot) stop_worker_Arg(msg *TGApi.Message) error {
-	if chatbot.tradeBot.IsValidWorker(msg.Text) {
-		id, err := ConvId(msg.Text)
-		if err != nil {
-			return err
-		}
-		chatbot.tradeBot.StopWorker(id)
-		return nil
-	} else {
-		RespMsg := TGApi.NewMessage(msg.Chat.ID, fmt.Sprintf("Воркер с таким id: %s не найден. "+
-			"Чтобы получить список запущенных воркеров воспользуйтесь коммандой /worker_list", msg.Text))
-		_, err := chatbot.tg.Send(RespMsg)
+// обработчик ответа на команду ввода токена
+func (chatbot *telegramChatBot) tinkoff_token_Arg(msg *TGApi.Message) error {
+	new_bot, err := trade.NewTradeBot(msg.Chat.ID, msg.Text)
+	if err != nil {
 		return err
 	}
+	if !new_bot.TokenIsValid() {
+		RespMsg := TGApi.NewMessage(msg.Chat.ID, "Неверный токен!")
+		_, err = chatbot.tg.Send(RespMsg)
+		return err
+	}
+	chatbot.tradeBot = new_bot
+	go chatbot.StartBot(msg.Chat.ID)
+	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Бот успешно создан!\nЧтобы отслеживать состояние актива "+
+		"при помощи индикаторов воспользуйтесь командой /new_worker")
+	_, err = chatbot.tg.Send(RespMsg)
+	return err
 }
 
+// WORKER_LIST
+// обработчик команды получения списка запущенный воркеров
 func (chatbot *telegramChatBot) worker_list_Command(msg *TGApi.Message) error {
 	var infoSl []string
 	var infoStr string
@@ -244,41 +206,6 @@ func (chatbot *telegramChatBot) worker_list_Command(msg *TGApi.Message) error {
 	return nil
 }
 
-// START
-func (chatbot *telegramChatBot) start_Command(msg *TGApi.Message) error {
-	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Привет! Это бот для Тинкофф Инвестиций. "+
-		"Сначала необходимо получить в личном кабинете Тинькофф Инвестиций токен только для чтения. "+
-		"Для передачи его боту воспользуйтесь командой /tinkoff_token")
-	_, err := chatbot.tg.Send(RespMsg)
-	return err
-}
-
-// TINKOFF_TOKEN
-func (chatbot *telegramChatBot) tinkoff_token_Command(msg *TGApi.Message) error {
-	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Введите токен из Тинькофф Инвестиций")
-	_, err := chatbot.tg.Send(RespMsg)
-	return err
-}
-
-func (chatbot *telegramChatBot) tinkoff_token_Arg(msg *TGApi.Message) error {
-	new_bot, err := trade.NewTradeBot(msg.Text, msg.Chat.ID)
-	if err != nil {
-		return err
-	}
-	if !new_bot.TokenIsValid() {
-		RespMsg := TGApi.NewMessage(msg.Chat.ID, "Неверный токен!")
-		_, err = chatbot.tg.Send(RespMsg)
-		return err
-	}
-	chatbot.tradeBot = new_bot
-	//chatbot.botWg.Add(1)
-	go chatbot.StartBot(msg.Chat.ID)
-	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Бот успешно создан!\n Чтобы отслеживать состояние актива "+
-		"при помощи индикаторов воспользуйтесь командой /new_worker")
-	_, err = chatbot.tg.Send(RespMsg)
-	return err
-}
-
 // NEW_WORKER
 var indicatorKeyboard = TGApi.NewInlineKeyboardMarkup(
 	TGApi.NewInlineKeyboardRow(
@@ -288,6 +215,7 @@ var indicatorKeyboard = TGApi.NewInlineKeyboardMarkup(
 		TGApi.NewInlineKeyboardButtonData("BollingerBands", "bollingerBands"),
 		TGApi.NewInlineKeyboardButtonData("RSI", "rsi")))
 
+// обработчик команды создания нового воркера
 func (chatbot *telegramChatBot) new_worker_Command(msg *TGApi.Message) error {
 	/*buttons := TGApi.NewKeyboardButtonRow()
 	buttons = append(buttons, TGApi.NewKeyboardButton("doubleEMA"))
@@ -299,7 +227,9 @@ func (chatbot *telegramChatBot) new_worker_Command(msg *TGApi.Message) error {
 	return err
 }
 
-// получаем выбраную стратегию и запрашиваем параметры для нее
+// обработчик результата callback на создание нового бота
+//
+//	получаем выбраную стратегию и запрашиваем параметры для нее
 func (chatbot *telegramChatBot) new_worker_callback(callback *TGApi.CallbackQuery) error {
 
 	//надо как-то различать колл бэких
@@ -331,7 +261,75 @@ func (chatbot *telegramChatBot) new_worker_callback(callback *TGApi.CallbackQuer
 	return err
 }
 
-// FIGI
+// STOP_WORKER
+// обработчик команды на остановку воркера
+func (chatbot *telegramChatBot) stop_worker_Command(msg *TGApi.Message) error {
+	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Введите id воркера, который необходимо остановить. "+
+		"Чтобы получить список запущенных воркеров воспользуйтесь коммандой /worker_list")
+	_, err := chatbot.tg.Send(RespMsg)
+	return err
+}
+
+// обработчик ответа на команду остановки воркера
+func (chatbot *telegramChatBot) stop_worker_Arg(msg *TGApi.Message) error {
+	if chatbot.tradeBot.IsValidWorker(msg.Text) {
+		id, err := ConvId(msg.Text)
+		if err != nil {
+			return err
+		}
+		chatbot.tradeBot.StopWorker(id)
+		return nil
+	} else {
+		RespMsg := TGApi.NewMessage(msg.Chat.ID, fmt.Sprintf("Воркер с таким id: %s не найден. "+
+			"Чтобы получить список запущенных воркеров воспользуйтесь коммандой /worker_list", msg.Text))
+		_, err := chatbot.tg.Send(RespMsg)
+		return err
+	}
+}
+
+// DELETE_BOT
+var deleteKeyboard = TGApi.NewInlineKeyboardMarkup(TGApi.NewInlineKeyboardRow(
+	TGApi.NewInlineKeyboardButtonData("удалить", "delete"),
+	TGApi.NewInlineKeyboardButtonData("отмена", "cancel")))
+
+// обработчик команды удаления бота
+func (chatbot *telegramChatBot) delete_bot_Command(msg *TGApi.Message) error {
+	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Вы действительно хотите удалить бота?")
+	RespMsg.ReplyMarkup = deleteKeyboard
+	_, err := chatbot.tg.Send(RespMsg)
+	return err
+}
+
+// обработчик результата callback на удаление бота
+func (chatbot *telegramChatBot) delete_bot_Callback(callback *TGApi.CallbackQuery) error {
+	switch callback.Data {
+	case "delete":
+		if chatbot.tradeBot != nil {
+			chatbot.StopTradeBot()
+		}
+		RespMsg := TGApi.NewMessage(callback.Message.Chat.ID, "Бот остановлен")
+		_, err := chatbot.tg.Send(RespMsg)
+		if err != nil {
+			return err
+		}
+		go chatbot.StopChatBot()
+		return nil
+	case "cancel":
+		RespMsg := TGApi.NewMessage(callback.Message.Chat.ID, "Удаление бота отменено")
+		_, err := chatbot.tg.Send(RespMsg)
+		return err
+	default:
+		return fmt.Errorf("unknown callback: %s", callback.Data)
+	}
+
+}
+
+// HELP
+func (chatbot *telegramChatBot) help_Command(msg *TGApi.Message) error {
+	return nil
+}
+
+// GET FIGI
 var figiKeyboard = TGApi.NewInlineKeyboardMarkup(TGApi.NewInlineKeyboardRow(
 	TGApi.NewInlineKeyboardButtonData("bonds", "bonds"),
 	TGApi.NewInlineKeyboardButtonData("etfs", "etfs"),
@@ -339,13 +337,16 @@ var figiKeyboard = TGApi.NewInlineKeyboardMarkup(TGApi.NewInlineKeyboardRow(
 	TGApi.NewInlineKeyboardRow(TGApi.NewInlineKeyboardButtonData("currencies", "currencies"),
 		TGApi.NewInlineKeyboardButtonData("futures", "futures")))
 
+// обработчик команды на поиск figi актива
 func (chatbot *telegramChatBot) get_figi_Command(msg *TGApi.Message) error {
-	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Выберите тип актива, для которого необходимо найти figi идентификатор")
+	RespMsg := TGApi.NewMessage(msg.Chat.ID, "Выберите тип актива, для которого"+
+		" необходимо найти figi идентификатор")
 	RespMsg.ReplyMarkup = figiKeyboard
 	_, err := chatbot.tg.Send(RespMsg)
 	return err
 }
 
+// обработчик ответа на команду получения figi
 func (chatbot *telegramChatBot) get_figi_Arg(msg *TGApi.Message) error {
 	keyWord := strings.Fields(msg.Text)
 
@@ -354,17 +355,16 @@ func (chatbot *telegramChatBot) get_figi_Arg(msg *TGApi.Message) error {
 	var tmpStr string
 	var fullAssetsSl []string
 	var keyAssetsSl []string
-	for _, v := range assetsList {
+	for k, v := range assetsList {
 		tmpStr = fmt.Sprintf("%s: %s, \n", v.Name, v.Figi)
 
 		for _, s := range keyWord {
 			if strings.Contains(strings.ToLower(v.Name), strings.ToLower(s)) {
 				keyAssetsSl = append(keyAssetsSl, tmpStr)
-				continue
 			}
 		}
 
-		if len(assetsStr)+len(tmpStr) >= 4095 {
+		if len(assetsStr)+len(tmpStr) >= 4095 || len(assetsList)-1 == k {
 			fullAssetsSl = append(fullAssetsSl, assetsStr)
 			assetsStr = tmpStr
 		} else {
@@ -390,7 +390,7 @@ func (chatbot *telegramChatBot) get_figi_Arg(msg *TGApi.Message) error {
 	return err
 }
 
-// получаем выбраный тип актива и присылаем доступные для торговли
+// отбработчик результата callback на выбор figi
 func (chatbot *telegramChatBot) figiCallback(callback *TGApi.CallbackQuery) error {
 	RespMsg := TGApi.NewMessage(callback.Message.Chat.ID, "Введите название актива")
 	_, err := chatbot.tg.Send(RespMsg)

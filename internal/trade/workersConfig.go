@@ -1,8 +1,8 @@
 package trade
 
 import (
+	"final/internal/strategy"
 	"github.com/google/uuid"
-	"someshit/internal/strategy"
 )
 
 // worker configuration struct which send by channel for Run

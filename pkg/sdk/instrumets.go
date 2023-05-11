@@ -1,9 +1,9 @@
 package sdk
 
 import (
+	"final/pkg/proto"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"google.golang.org/grpc"
-	"someshit/pkg/proto"
 )
 
 type InstrumentsInterface interface {

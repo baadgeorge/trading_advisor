@@ -2,31 +2,30 @@ package trade
 
 import (
 	"errors"
+	"final/internal/strategy"
+	"final/internal/strategy/utils"
+	"final/pkg/proto"
+	"final/pkg/sdk"
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"someshit/internal/strategy"
-	"someshit/internal/strategy/utils"
-	"someshit/pkg/proto"
-	"someshit/pkg/sdk"
 	"time"
 )
 
-//var services = sdk.NewServicePool()
-
+// структура воркера
 type TradeWorker struct {
-	workerID       uint32
-	figi           string
-	assetsName     string
+	workerID       uint32 //уникальный идентификатор воркера
+	figi           string //figi актива
+	assetsName     string //название актива
 	logger         *logrus.Entry
-	workerSleepSec int
-	strategy       strategy.Strategy
-	indicatorState bool
-	services       *sdk.ServicePool
-	candles        []*proto.HistoricCandle
-	cancelCh       chan struct{}
+	workerSleepSec int                     //интервал запроса данных
+	strategy       strategy.Strategy       //стратегия воркера(индикатор)
+	indicatorState bool                    //текущее состояние индикатора
+	services       *sdk.ServicePool        //сервисы Тинькофф Инвестиций
+	candles        []*proto.HistoricCandle //свечи
+	cancelCh       chan struct{}           //канал завершения воркера
 }
 
-// TODO sleep
+// функция создания экземпляра воркера
 func NewTradeWorker(workerConfig *WorkerConfig, services *sdk.ServicePool, logger *logrus.Logger) *TradeWorker {
 	return &TradeWorker{
 		workerID:   workerConfig.workerId,
@@ -44,13 +43,8 @@ func NewTradeWorker(workerConfig *WorkerConfig, services *sdk.ServicePool, logge
 	}
 }
 
+// метод инициализации данных воркера(свечи и название актива)
 func (tw *TradeWorker) initData(stateChangesCh chan WorkersChanges) error {
-	stateChangesCh <- WorkersChanges{
-		Img:         nil,
-		WorkerId:    tw.workerID,
-		SignalsType: Info_type,
-		Description: fmt.Sprintf("Воркер с параметрами %s запущен", tw.GetWorkersDescr()),
-	}
 	name, err := tw.GetAssetsNameByFigi()
 	if err != nil {
 		stateChangesCh <- WorkersChanges{
@@ -78,11 +72,17 @@ func (tw *TradeWorker) initData(stateChangesCh chan WorkersChanges) error {
 	return nil
 }
 
+// метод циклической проверки индикатора и остановки воркера
 func (tw *TradeWorker) Run(stateChangesCh chan WorkersChanges) {
 	//defer wg.Done()
-
 	count := 0
 	tw.logger.Infof("worker %d is running\n", tw.workerID)
+	stateChangesCh <- WorkersChanges{
+		Img:         nil,
+		WorkerId:    tw.workerID,
+		SignalsType: Info_type,
+		Description: fmt.Sprintf("Воркер с параметрами %s запущен", tw.GetWorkersDescr()),
+	}
 	for {
 		select {
 		case <-time.After(time.Duration(tw.workerSleepSec) * time.Second):
@@ -155,6 +155,7 @@ func (tw *TradeWorker) Run(stateChangesCh chan WorkersChanges) {
 	}
 }
 
+// метод добавления новых свечей в candles
 func (tw *TradeWorker) addNewCandles() error {
 	if len(tw.candles) == 0 {
 		return errors.New("Historic candles were not init")
@@ -179,7 +180,7 @@ func (tw *TradeWorker) addNewCandles() error {
 	}
 	//если последняя свеча не закрыта, то не добавляем её
 	if !candles[len(candles)-1].IsComplete {
-		tw.candles = append(tw.candles[len(candles):], candles[:len(candles)-1]...)
+		tw.candles = append(tw.candles[len(candles)-1:], candles[:len(candles)-1]...)
 		return nil
 	}
 	tw.candles = append(tw.candles[len(candles):], candles...)
@@ -188,6 +189,7 @@ func (tw *TradeWorker) addNewCandles() error {
 
 const candlePartSize = 23
 
+// метод инициализации свечей
 func (tw *TradeWorker) initCandles() error {
 	interval := tw.strategy.GetAnalyzeInterval()
 	if interval > 400 {
@@ -238,6 +240,7 @@ func (tw *TradeWorker) initCandles() error {
 	return nil
 }
 
+// метод проверки доступности торговли активом
 func (tw *TradeWorker) tradingStatus() bool {
 	status, err := tw.services.MarketDataService.GetTradingStatus(tw.figi)
 	if err != nil {
@@ -248,9 +251,9 @@ func (tw *TradeWorker) tradingStatus() bool {
 	return status.TradingStatus == proto.SecurityTradingStatus_SECURITY_TRADING_STATUS_NORMAL_TRADING
 }
 
-// доступность сигнала проверяется в Run()
+// метод проверки индикатора
 func (tw *TradeWorker) tradingIndicator() ([][]byte, string, error) {
-
+	// доступность сигнала проверяется в Run()
 	err := tw.addNewCandles()
 	if err != nil {
 		tw.logger.Error(err)
@@ -286,18 +289,22 @@ func (tw *TradeWorker) tradingIndicator() ([][]byte, string, error) {
 	return img, resp, err
 }
 
+// метод получения описания воркера
 func (tw *TradeWorker) GetWorkersDescr() string {
 	return fmt.Sprintf("worker id: %d figi: %s, assets name: %s, strategy %s", tw.workerID, tw.figi, tw.assetsName, tw.strategy.GetStrategyParamByString())
 }
 
+// метод получения id воркера
 func (tw *TradeWorker) GetWorkerID() uint32 {
 	return tw.workerID
 }
 
+// метод получения канала остановки вокера
 func (tw *TradeWorker) GetWorkerCancelCh() chan struct{} {
 	return tw.cancelCh
 }
 
+// метод получения названия актива по его figi
 func (tw *TradeWorker) GetAssetsNameByFigi() (string, error) {
 
 	tmp, err := tw.services.InstrumentsService.GetInstrumentBy(

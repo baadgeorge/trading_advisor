@@ -2,15 +2,16 @@ package strategy
 
 import (
 	"errors"
+	"final/internal/strategy/utils"
+	"final/pkg/proto"
 	"fmt"
 	"github.com/sdcoffey/techan"
-	"someshit/internal/strategy/utils"
-	"someshit/pkg/proto"
 )
 
 type MACD struct {
-	ShortWindow         int
-	LongWindow          int
+	ShortWindow int
+	LongWindow  int
+	//SignalWindow        in
 	CandleIntervalHours int
 }
 

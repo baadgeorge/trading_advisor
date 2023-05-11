@@ -4,16 +4,16 @@ import (
 	"errors"
 	"fmt"
 
+	"final/internal/strategy/utils"
+	"final/pkg/proto"
 	"github.com/sdcoffey/techan"
-	"someshit/internal/strategy/utils"
-	"someshit/pkg/proto"
 )
 
 type RSI struct {
 	HighBorder          float64
 	LowBorder           float64
-	Window              int
 	CandleIntervalHours int
+	Window              int
 	Position            int `reflect:"-"`
 }
 

@@ -1,36 +1,17 @@
 package utils
 
 import (
+	"final/pkg/proto"
 	"fmt"
+
 	"github.com/sdcoffey/big"
 	"github.com/sdcoffey/techan"
-	"someshit/pkg/proto"
 )
 
-type PlotItemStruct struct {
-	Period techan.TimePeriod
-	Value  float64
-}
-
-/*type myTicks struct{
-	Ticker plot.Ticker
-	Format string
-	Time func(t float64) time.Time
-}
-
-func (myTicks) Ticks(min, max float64) []plot.Tick {
-	var ticks []plot.Tick
-	for i := min; i < max; i++ {
-		if math.Mod(i, 5) == 0 {
-			ticks = append(ticks, plot.Tick{Value: i, Label: strconv})
-		}
-
-	}
-}*/
-
+// функция конвертации типа свечей для выичсления значения индикатора
 func CandlesToTimeSeries(candles []*proto.HistoricCandle) *techan.TimeSeries {
 	var techanCandles []*techan.Candle
-	//если последняя свеча не полная, то не добавляем ее
+	//если последняя свеча не полная, то не анализируем ее
 	for i, c := range candles {
 		if i == len(candles)-1 && !candles[i].IsComplete {
 			break
@@ -51,7 +32,6 @@ func CandlesToTimeSeries(candles []*proto.HistoricCandle) *techan.TimeSeries {
 		}
 		techanCandles = append(techanCandles, tc)
 	}
-
 	return &techan.TimeSeries{Candles: techanCandles}
 }
 

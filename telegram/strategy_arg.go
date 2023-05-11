@@ -1,11 +1,11 @@
 package telegram
 
 import (
+	"final/internal/strategy"
+	"final/internal/trade"
 	"fmt"
 	TGApi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"reflect"
-	"someshit/cmd/trade"
-	"someshit/internal/strategy"
 	"strconv"
 )
 
@@ -193,12 +193,12 @@ func (chatbot *telegramChatBot) rsi_Arg(msg *TGApi.Message) error {
 		_, err = chatbot.tg.Send(errResp)
 		return err
 	}
-	strat.Window, err = strconv.Atoi(params[3])
+	strat.CandleIntervalHours, err = strconv.Atoi(params[4])
 	if err != nil {
 		_, err = chatbot.tg.Send(errResp)
 		return err
 	}
-	strat.CandleIntervalHours, err = strconv.Atoi(params[4])
+	strat.Window, err = strconv.Atoi(params[3])
 	if err != nil {
 		_, err = chatbot.tg.Send(errResp)
 		return err

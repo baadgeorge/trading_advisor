@@ -1,20 +1,20 @@
 package sdk
 
 import (
+	"final/pkg/proto"
 	"fmt"
-	"github.com/golang/protobuf/ptypes/timestamp"
+	"time"
+
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"someshit/pkg/proto"
-	"time"
 )
 
 type MarketDataInterface interface {
-	// The method of requesting historical candlesticks by instrument.
-	GetCandles(figi string, from, to *timestamp.Timestamp, interval proto.CandleInterval) ([]*proto.HistoricCandle, error)
-	// The method of requesting the latest prices for instruments.
+	// метод запроса исторических свечей для актива
+	GetCandles(figi string, from, to time.Time, interval time.Duration) ([]*proto.HistoricCandle, error)
+	// метод запроса последней цены для актива
 	GetLastPrices(figi []string) ([]*proto.LastPrice, error)
-	// The method of requesting the status of trading on instruments.
+	// метод запроса доступности торгов активом
 	GetTradingStatus(figi string) (*proto.GetTradingStatusResponse, error)
 }
 

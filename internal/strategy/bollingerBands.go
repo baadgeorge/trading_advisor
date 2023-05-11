@@ -2,18 +2,17 @@ package strategy
 
 import (
 	"errors"
+	"final/internal/strategy/utils"
+	"final/pkg/proto"
 	"fmt"
+
 	"github.com/sdcoffey/techan"
-	"someshit/internal/strategy/utils"
-	"someshit/pkg/proto"
 )
 
 type BollingerBands struct {
-	//AnalyzeIntervalInHours int
 	Window              int
 	Sigma               float64 //отклонение(влияет на ширину канала)
 	CandleIntervalHours int
-	//PriceBetweenBands bool
 }
 
 func NewBollingerBand(candleIntervalHours, window int, sigma float64) *BollingerBands {

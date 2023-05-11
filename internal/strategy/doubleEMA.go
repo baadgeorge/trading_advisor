@@ -2,10 +2,10 @@ package strategy
 
 import (
 	"errors"
+	"final/internal/strategy/utils"
+	"final/pkg/proto"
 	"fmt"
 	"github.com/sdcoffey/techan"
-	"someshit/internal/strategy/utils"
-	"someshit/pkg/proto"
 )
 
 const (
@@ -17,10 +17,7 @@ type DoubleEMA struct {
 	ShortWindow         int
 	LongWindow          int
 	CandleIntervalHours int
-	//AnalyzeIntervalHours int
-	//OffsetShort          int
-	//OffsetLong             int
-	WhichEMAHigher bool `reflect:"-"`
+	WhichEMAHigher      bool `reflect:"-"`
 }
 
 func NewDoubleEMA(shortWindow, longWindow, candleInterval, offsetShort, offsetLong int) *DoubleEMA {
@@ -28,10 +25,7 @@ func NewDoubleEMA(shortWindow, longWindow, candleInterval, offsetShort, offsetLo
 		ShortWindow:         shortWindow,
 		LongWindow:          longWindow,
 		CandleIntervalHours: candleInterval,
-		//AnalyzeIntervalHours: analyzeInterval,
-		//OffsetShort:            offsetShort,
-		//OffsetLong:             offsetLong,
-		WhichEMAHigher: false,
+		WhichEMAHigher:      false,
 	}
 }
 

@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"github.com/pplcc/plotext"
+	"github.com/sdcoffey/techan"
 	"go-hep.org/x/hep/hplot"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
@@ -28,6 +29,13 @@ func (MyTicks) Ticks(min, max float64) []plot.Tick {
 	return ticks
 }*/
 
+// структура представления свечей для построения графика
+type PlotItemStruct struct {
+	Period techan.TimePeriod
+	Value  float64
+}
+
+// функция добавления кастомной оси Х на график
 func CustomXAxis(names []string, p *plot.Plot) *plot.Plot {
 	p.X.Tick.Width = 0.5
 	p.X.Tick.Length = 6
@@ -63,25 +71,14 @@ func CustomXAxis(names []string, p *plot.Plot) *plot.Plot {
 	return p
 }
 
+// функция построения графика
 func PlotData(plots map[string][]PlotItemStruct, xName, yName, title string) ([]byte, error) {
 	p := plot.New()
 	p.Title.Text = title
 
-	//xticks := plot.TimeTicks{Format: "2006-01-02\n15:04"}
-	//Format: "2006-01-02\n15:04"}
-	//Time:   plot.UnixTimeIn(time.Local)}
-
-	//p.X.Tick.Marker = xticks
-	/*{
-		Ticker: hplot.Ticks{N: 12},
-		Format: "2006-01-02\n15:04",
-	}*/
 	p.Y.Tick.Marker = hplot.Ticks{N: 10}
 
-	//p.X.Tick.Marker = hplot.Ticks{Format: "2006-01-02\n15:04", N: 10}
-	//grid := plotter.NewGrid()
 	p.Add(plotter.NewGrid())
-	//p.Title.Text =.
 	p.X.Label.Text = xName
 	p.Y.Label.Text = yName
 	pl := plot.New()
@@ -97,7 +94,6 @@ func PlotData(plots map[string][]PlotItemStruct, xName, yName, title string) ([]
 		pts := make(plotter.XYs, len(candles))
 
 		for k, v := range candles {
-			//pts[k].X = float64(v.Period.End.Unix())
 			pts[k].X = float64(k)
 			pts[k].Y = v.Value
 		}

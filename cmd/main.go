@@ -1,18 +1,20 @@
 package main
 
 import (
+	"final/telegram"
 	TGApi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"os"
-	"someshit/telegram"
 )
 
 func main() {
-	if err := godotenv.Load("/Users/george/go/GolandProjects/someshit/telegram.env"); err != nil {
+	if err := godotenv.Load("passw.env"); err != nil {
 		logrus.Fatalf("can't load env: %s", err.Error())
 		return
 	}
+
+	//rService := database.NewRepoService(db)
 	//instr := sdk.NewServicePool("t.LCgR7EtlcOlfRM1epjYTV0Z9bF2gqeGZhUH831L8vUBb0-LH6EuIXEW5o6k4XKmpA7vPVw39hU02de1Mhcv-yw")
 	botAPI, err := TGApi.NewBotAPI(os.Getenv("BOT_TOKEN"))
 	if err != nil {
@@ -40,7 +42,7 @@ func main() {
 
 	wg := new(sync.WaitGroup)
 	wg.Add(3)
-	go tb.StartNewWorkers(wg)
+	go tb.TradeBotRun(wg)
 	go sendStrat(ch, wg)
 	time.Sleep(30 * time.Second)
 	go stopWorkers(tb, wg)
