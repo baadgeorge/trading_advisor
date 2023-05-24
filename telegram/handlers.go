@@ -125,8 +125,6 @@ func (chatbot *telegramChatBot) handleTextMessageAfterCallback(msg *TGApi.Messag
 		return chatbot.doubleEMA_Arg(msg)
 	case "bollingerBands":
 		return chatbot.bb_Arg(msg)
-	case "macd":
-		return chatbot.macd_Arg(msg)
 	case "rsi":
 		return chatbot.rsi_Arg(msg)
 	case "bonds", "etfs", "shares", "futures", "currencies":
@@ -209,8 +207,7 @@ func (chatbot *telegramChatBot) worker_list_Command(msg *TGApi.Message) error {
 // NEW_WORKER
 var indicatorKeyboard = TGApi.NewInlineKeyboardMarkup(
 	TGApi.NewInlineKeyboardRow(
-		TGApi.NewInlineKeyboardButtonData("DoubleEMA", "doubleEMA"),
-		TGApi.NewInlineKeyboardButtonData("MACD", "macd")),
+		TGApi.NewInlineKeyboardButtonData("DoubleEMA", "doubleEMA")),
 	TGApi.NewInlineKeyboardRow(
 		TGApi.NewInlineKeyboardButtonData("BollingerBands", "bollingerBands"),
 		TGApi.NewInlineKeyboardButtonData("RSI", "rsi")))
@@ -239,24 +236,22 @@ func (chatbot *telegramChatBot) new_worker_callback(callback *TGApi.CallbackQuer
 		strat_fields = GetStrategyFieldsFromStruct(strategy.BollingerBands{})
 	case "doubleEMA":
 		strat_fields = GetStrategyFieldsFromStruct(strategy.DoubleEMA{})
-	case "macd":
-		strat_fields = GetStrategyFieldsFromStruct(strategy.MACD{})
 	case "rsi":
 		strat_fields = GetStrategyFieldsFromStruct(strategy.RSI{})
 	}
 
 	var strat_fields_by_string string
-	for k, v := range strat_fields {
-		if k < len(strat_fields)-1 {
+	for _, v := range strat_fields {
+		strat_fields_by_string = strat_fields_by_string + fmt.Sprintf("параметр: %s тип: %s\n", v.field_name, v.field_type)
+		/*if k < len(strat_fields)-1 {
 			strat_fields_by_string = strat_fields_by_string + fmt.Sprintf("%s %s, ", v.field_name, v.field_type)
 		} else {
 			strat_fields_by_string = strat_fields_by_string + fmt.Sprintf("%s %s", v.field_name, v.field_type)
-		}
+		}*/
 	}
 	RespMsg := TGApi.NewMessage(callback.Message.Chat.ID,
-		fmt.Sprintf("Введите через пробел figi актива и параметры для индикатора %s\n %s\n"+
-			"Доступные для анализа интервалы: 1 час, 24 часа ",
-			chatbot.currChatState.value, strat_fields_by_string))
+		fmt.Sprintf("Введите через пробел figi актива и параметры для индикатора %s\n%s\nДоступные для анализа интервалы: 1 час, 24 часа",
+			callback.Data, strat_fields_by_string))
 	_, err := chatbot.tg.Send(RespMsg)
 	return err
 }
@@ -326,16 +321,25 @@ func (chatbot *telegramChatBot) delete_bot_Callback(callback *TGApi.CallbackQuer
 
 // HELP
 func (chatbot *telegramChatBot) help_Command(msg *TGApi.Message) error {
-	return nil
+	start_text := "/start команда является стартовой для Телеграм-бота\n"
+	tinkoff_token_text := "/tinkoff_token команда для ввода токена Тинькофф Инвестици\n"
+	new_worker_text := "/new_worker команда для создания и запуска микро-бота\n"
+	worker_list_text := "/worker_list команда вывода списка запущенных микро-ботов\n"
+	stop_worker_text := "/stop_worker команда удаления микро-бота\n"
+	delete_bot_text := "/delete_bot команда остановки бота и всех его воркеров\n"
+	get_figi := "/get_figi команда поиска идентификатора актива(figi)\n"
+	text := start_text + tinkoff_token_text + new_worker_text + worker_list_text + stop_worker_text + delete_bot_text + get_figi
+	RespMsg := TGApi.NewMessage(msg.Chat.ID, text)
+	_, err := chatbot.tg.Send(RespMsg)
+	return err
 }
 
 // GET FIGI
-var figiKeyboard = TGApi.NewInlineKeyboardMarkup(TGApi.NewInlineKeyboardRow(
-	TGApi.NewInlineKeyboardButtonData("bonds", "bonds"),
-	TGApi.NewInlineKeyboardButtonData("etfs", "etfs"),
-	TGApi.NewInlineKeyboardButtonData("shares", "shares")),
-	TGApi.NewInlineKeyboardRow(TGApi.NewInlineKeyboardButtonData("currencies", "currencies"),
-		TGApi.NewInlineKeyboardButtonData("futures", "futures")))
+var figiKeyboard = TGApi.NewInlineKeyboardMarkup(
+	TGApi.NewInlineKeyboardRow(
+		TGApi.NewInlineKeyboardButtonData("shares", "shares")),
+	TGApi.NewInlineKeyboardRow(
+		TGApi.NewInlineKeyboardButtonData("currencies", "currencies")))
 
 // обработчик команды на поиск figi актива
 func (chatbot *telegramChatBot) get_figi_Command(msg *TGApi.Message) error {
@@ -392,7 +396,7 @@ func (chatbot *telegramChatBot) get_figi_Arg(msg *TGApi.Message) error {
 
 // отбработчик результата callback на выбор figi
 func (chatbot *telegramChatBot) figiCallback(callback *TGApi.CallbackQuery) error {
-	RespMsg := TGApi.NewMessage(callback.Message.Chat.ID, "Введите название актива")
+	RespMsg := TGApi.NewMessage(callback.Message.Chat.ID, "Введите название актива или символ '-' для вывода полного списка")
 	_, err := chatbot.tg.Send(RespMsg)
 	return err
 }

@@ -22,13 +22,21 @@ type field struct {
 
 func GetStrategyFieldsFromStruct(strat interface{}) []field {
 	var Fields []field
+	var FieldsType string
 	val := reflect.ValueOf(strat)
 	structType := val.Type()
 	for i := 0; i < structType.NumField(); i++ {
 		if structType.Field(i).Tag.Get("reflect") != "-" {
+			switch structType.Field(i).Type.String() {
+			case "float64", "float32":
+				FieldsType = "вещественное"
+			case "int", "int8", "int16", "int32", "int64",
+				"uint", "uint8", "uint16", "uint32", "uint64":
+				FieldsType = "целое"
+			}
 			Fields = append(Fields, field{
 				field_name: structType.Field(i).Name,
-				field_type: structType.Field(i).Type.String(),
+				field_type: FieldsType,
 			})
 		}
 	}

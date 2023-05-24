@@ -27,10 +27,12 @@ type TradeWorker struct {
 
 // функция создания экземпляра воркера
 func NewTradeWorker(workerConfig *WorkerConfig, services *sdk.ServicePool, logger *logrus.Logger) *TradeWorker {
+	name, _ := GetAssetsNameByFigi(workerConfig.figi, services)
+
 	return &TradeWorker{
 		workerID:   workerConfig.workerId,
 		figi:       workerConfig.figi,
-		assetsName: "",
+		assetsName: name,
 		logger: logger.WithFields(logrus.Fields{
 			"workerID": workerConfig.workerId,
 			"figi":     workerConfig.figi,
@@ -45,20 +47,23 @@ func NewTradeWorker(workerConfig *WorkerConfig, services *sdk.ServicePool, logge
 
 // метод инициализации данных воркера(свечи и название актива)
 func (tw *TradeWorker) initData(stateChangesCh chan WorkersChanges) error {
-	name, err := tw.GetAssetsNameByFigi()
-	if err != nil {
-		stateChangesCh <- WorkersChanges{
-			Img:         nil,
-			WorkerId:    tw.workerID,
-			SignalsType: Err_type,
-			Description: fmt.Sprintf("Ошибка в воркере %d: неудалось загрузить имя актива", tw.workerID),
-		}
-		tw.logger.Error(err)
-		return err
-	}
-	tw.assetsName = name
 
-	err = tw.initCandles()
+	if tw.assetsName == "" {
+		name, err := GetAssetsNameByFigi(tw.figi, tw.services)
+		if err != nil {
+			stateChangesCh <- WorkersChanges{
+				Img:         nil,
+				WorkerId:    tw.workerID,
+				SignalsType: Err_type,
+				Description: fmt.Sprintf("Ошибка в воркере %d: неудалось найти актив с figi: %s", tw.workerID, tw.figi),
+			}
+			tw.logger.Error(err)
+			return err
+		}
+		tw.assetsName = name
+	}
+
+	err := tw.initCandles()
 	if err != nil {
 		stateChangesCh <- WorkersChanges{
 			Img:         nil,
@@ -81,7 +86,7 @@ func (tw *TradeWorker) Run(stateChangesCh chan WorkersChanges) {
 		Img:         nil,
 		WorkerId:    tw.workerID,
 		SignalsType: Info_type,
-		Description: fmt.Sprintf("Воркер с параметрами %s запущен", tw.GetWorkersDescr()),
+		Description: fmt.Sprintf("Запущен воркер с параметрами %s", tw.GetWorkersDescr()),
 	}
 	for {
 		select {
@@ -137,7 +142,7 @@ func (tw *TradeWorker) Run(stateChangesCh chan WorkersChanges) {
 						Img:         img,
 						WorkerId:    tw.workerID,
 						SignalsType: Signal_type,
-						Description: fmt.Sprintf("Получен новый сигнал от воркера с параметрами %s\n %v",
+						Description: fmt.Sprintf("Получен новый сигнал от воркера с параметрами\n%s\nСигнал: %v",
 							tw.GetWorkersDescr(), ind),
 					}
 				}
@@ -147,7 +152,7 @@ func (tw *TradeWorker) Run(stateChangesCh chan WorkersChanges) {
 				Img:         nil,
 				WorkerId:    tw.workerID,
 				SignalsType: Cancel_type,
-				Description: fmt.Sprintf("Воркер %d остановлен", tw.workerID),
+				Description: fmt.Sprintf("Остановлен воркер %d", tw.workerID),
 			}
 			tw.logger.Infof("worker %d stopped\n", tw.workerID)
 			return
@@ -194,7 +199,7 @@ func (tw *TradeWorker) initCandles() error {
 	interval := tw.strategy.GetAnalyzeInterval()
 	if interval > 400 {
 		tw.logger.Errorf("Too wide interval %d", interval)
-		msg := fmt.Sprintf("Слишком большой интервал для анализа %d", interval)
+		msg := fmt.Sprintf("Слишком большой интервал для анализа: %d", interval)
 		return errors.New(msg)
 	}
 
@@ -257,14 +262,14 @@ func (tw *TradeWorker) tradingIndicator() ([][]byte, string, error) {
 	err := tw.addNewCandles()
 	if err != nil {
 		tw.logger.Error(err)
-		msg := "ошибка при добавлении новых свечей"
+		msg := "Ошибка при добавлении новых свечей"
 		return nil, "", errors.New(msg)
 	}
 
 	ind, err := tw.strategy.Indicator(tw.candles)
 	if err != nil {
 		tw.logger.Error(err)
-		msg := "ошибка при проверке индикатора"
+		msg := "Ошибка при проверке индикатора"
 		return nil, "", errors.New(msg)
 	}
 
@@ -291,7 +296,7 @@ func (tw *TradeWorker) tradingIndicator() ([][]byte, string, error) {
 
 // метод получения описания воркера
 func (tw *TradeWorker) GetWorkersDescr() string {
-	return fmt.Sprintf("worker id: %d figi: %s, assets name: %s, strategy %s", tw.workerID, tw.figi, tw.assetsName, tw.strategy.GetStrategyParamByString())
+	return fmt.Sprintf("worker id: %d\nfigi: %s\nassets name: %s\n\nstrategy %s", tw.workerID, tw.figi, tw.assetsName, tw.strategy.GetStrategyParamByString())
 }
 
 // метод получения id воркера
@@ -305,12 +310,12 @@ func (tw *TradeWorker) GetWorkerCancelCh() chan struct{} {
 }
 
 // метод получения названия актива по его figi
-func (tw *TradeWorker) GetAssetsNameByFigi() (string, error) {
+func GetAssetsNameByFigi(figi string, services *sdk.ServicePool) (string, error) {
 
-	tmp, err := tw.services.InstrumentsService.GetInstrumentBy(
+	tmp, err := services.InstrumentsService.GetInstrumentBy(
 		proto.InstrumentRequest{
 			IdType: proto.InstrumentIdType_INSTRUMENT_ID_TYPE_FIGI,
-			Id:     tw.figi,
+			Id:     figi,
 		})
 	if err != nil {
 		return "", err

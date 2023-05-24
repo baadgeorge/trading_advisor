@@ -10,11 +10,11 @@ import (
 )
 
 type RSI struct {
-	HighBorder          float64
-	LowBorder           float64
-	CandleIntervalHours int
-	Window              int
-	Position            int `reflect:"-"`
+	HighPercentageBorder int
+	LowPercentageBorder  int
+	CandleIntervalHours  int
+	Window               int
+	Position             int `reflect:"-"`
 }
 
 const (
@@ -39,7 +39,7 @@ func (rsi *RSI) Indicator(candles []*proto.HistoricCandle) (res IndicatorSignal,
 	rsiInd := techan.NewRelativeStrengthIndexIndicator(techan.NewClosePriceIndicator(convCandles), rsi.Window).Calculate(rsi.Window).Float()
 
 	//rsi пробивает high border сверху вниз - продажа
-	if rsi.Position == RSIaboveHighBorder && rsiInd <= rsi.HighBorder {
+	if rsi.Position == RSIaboveHighBorder && rsiInd <= float64(rsi.HighPercentageBorder) {
 		rsi.Position = RSIbetweenBorders
 		return IndicatorSignal{
 			Changed: true,
@@ -48,7 +48,7 @@ func (rsi *RSI) Indicator(candles []*proto.HistoricCandle) (res IndicatorSignal,
 	}
 
 	//rsi пробивает low border снизу вверх - покупка
-	if rsi.Position == RSIunderLowBorder && rsiInd >= rsi.LowBorder {
+	if rsi.Position == RSIunderLowBorder && rsiInd >= float64(rsi.LowPercentageBorder) {
 		rsi.Position = RSIbetweenBorders
 		return IndicatorSignal{
 			Changed: true,
@@ -71,8 +71,8 @@ func (rsi *RSI) GetAnalyzeInterval() int {
 }
 
 func (rsi *RSI) GetStrategyParamByString() string {
-	return fmt.Sprintf("RSI: HighBorder: %f LowBorder: %f Window: %d CandleIntervalHours: %d",
-		rsi.HighBorder, rsi.LowBorder, rsi.Window, rsi.CandleIntervalHours)
+	return fmt.Sprintf("RSI:\n HighPercentageBorder: %d\n LowPercentageBorder: %d\n Window: %d\n CandleIntervalHours: %d\n",
+		rsi.HighPercentageBorder, rsi.LowPercentageBorder, rsi.Window, rsi.CandleIntervalHours)
 }
 
 func (rsi *RSI) DataPlot(convCandles *techan.TimeSeries) ([][]byte, error) {
@@ -84,9 +84,6 @@ func (rsi *RSI) DataPlot(convCandles *techan.TimeSeries) ([][]byte, error) {
 	candles := convCandles.Candles
 
 	for k := rsi.GetAnalyzeInterval() - 1; k < len(candles); k++ {
-		/*	if k < macd.GetAnalyzeInterval() {
-			continue
-		}*/
 
 		//candlePart = utils.CandlesToTimeSeries(candles[:k])
 		candleSl = append(candleSl, utils.PlotItemStruct{
@@ -105,7 +102,7 @@ func (rsi *RSI) DataPlot(convCandles *techan.TimeSeries) ([][]byte, error) {
 
 	candleMap := make(map[string][]utils.PlotItemStruct)
 	candleMap["candles"] = candleSl
-	cp, err := utils.PlotData(candleMap, "time", "price", "Close price")
+	cp, err := utils.PlotData(candleMap, "time", "price", "Close price", false)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +110,7 @@ func (rsi *RSI) DataPlot(convCandles *techan.TimeSeries) ([][]byte, error) {
 
 	indPlot := make(map[string][]utils.PlotItemStruct)
 	indPlot["rsi"] = rsiSl
-	ip, err := utils.PlotData(indPlot, "time", "value", "RSI")
+	ip, err := utils.PlotData(indPlot, "time", "percentage value", "RSI", true)
 	if err != nil {
 		return nil, err
 	}

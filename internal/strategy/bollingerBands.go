@@ -76,7 +76,7 @@ func (bb *BollingerBands) GetAnalyzeInterval() int {
 }
 
 func (bb *BollingerBands) GetStrategyParamByString() string {
-	return fmt.Sprintf("Bollinger Bands: Window: %d Sigma %f CandleIntervalHours: %d\n", bb.Window, bb.Sigma, bb.CandleIntervalHours)
+	return fmt.Sprintf("Bollinger Bands:\n Window: %d\n Sigma %f\n CandleIntervalHours: %d\n", bb.Window, bb.Sigma, bb.CandleIntervalHours)
 }
 
 func (bb *BollingerBands) DataPlot(convCandles *techan.TimeSeries) ([][]byte, error) {
@@ -119,7 +119,7 @@ func (bb *BollingerBands) DataPlot(convCandles *techan.TimeSeries) ([][]byte, er
 	candleMap["candles"] = candleSl
 	candleMap["upperEMA"] = upperSl
 	candleMap["lowerEMA"] = lowerSl
-	p, err := utils.PlotData(candleMap, "time", "price", "Bollinger Bands")
+	p, err := utils.PlotData(candleMap, "time", "price", "Bollinger Bands", false)
 	if err != nil {
 		return nil, err
 	}

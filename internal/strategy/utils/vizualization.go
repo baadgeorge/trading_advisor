@@ -40,7 +40,6 @@ func CustomXAxis(names []string, p *plot.Plot) *plot.Plot {
 	p.X.Tick.Width = 0.5
 	p.X.Tick.Length = 6
 	p.X.Width = 0.5
-
 	//p.Y.Padding = p.X.Tick.Label.Width(names[0]) / 2
 
 	var numbers int
@@ -72,11 +71,15 @@ func CustomXAxis(names []string, p *plot.Plot) *plot.Plot {
 }
 
 // функция построения графика
-func PlotData(plots map[string][]PlotItemStruct, xName, yName, title string) ([]byte, error) {
+func PlotData(plots map[string][]PlotItemStruct, xName, yName, title string, yMinZero bool) ([]byte, error) {
 	p := plot.New()
 	p.Title.Text = title
 
 	p.Y.Tick.Marker = hplot.Ticks{N: 10}
+
+	if yMinZero == true {
+		p.Y.Min = 0
+	}
 
 	p.Add(plotter.NewGrid())
 	p.X.Label.Text = xName

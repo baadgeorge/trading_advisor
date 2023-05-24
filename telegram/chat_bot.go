@@ -7,7 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// структура состояния чата
+// структура состояния чатаnew
 type ChatState struct {
 	isCallback bool
 	isCommand  bool

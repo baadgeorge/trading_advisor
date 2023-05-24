@@ -25,7 +25,7 @@ func NewDoubleEMA(shortWindow, longWindow, candleInterval, offsetShort, offsetLo
 		ShortWindow:         shortWindow,
 		LongWindow:          longWindow,
 		CandleIntervalHours: candleInterval,
-		WhichEMAHigher:      false,
+		WhichEMAHigher:      true,
 	}
 }
 
@@ -117,11 +117,11 @@ func (dema *DoubleEMA) DataPlot(convCandles *techan.TimeSeries) ([][]byte, error
 	fmt.Printf("short\n %v\n", shortSl)
 	fmt.Printf("long\n %v\n", longSl)
 
-	candleMap := make(map[string][]utils.PlotItemStruct)
-	candleMap["candles"] = candleSl
-	candleMap["shortEMA"] = shortSl
-	candleMap["longEMA"] = longSl
-	p, err := utils.PlotData(candleMap, "time", "price", "Double EMA")
+	itemMap := make(map[string][]utils.PlotItemStruct)
+	itemMap["candles"] = candleSl
+	itemMap["shortEMA"] = shortSl
+	itemMap["longEMA"] = longSl
+	p, err := utils.PlotData(itemMap, "time", "price", "Double EMA", false)
 	if err != nil {
 		return nil, err
 	}
@@ -142,5 +142,5 @@ func (dema *DoubleEMA) GetAnalyzeInterval() int {
 }
 
 func (dema *DoubleEMA) GetStrategyParamByString() string {
-	return fmt.Sprintf("Double EMA: ShortWindow: %d LongWindow: %d CandleIntervalHours: %d", dema.ShortWindow, dema.LongWindow, dema.CandleIntervalHours)
+	return fmt.Sprintf("Double EMA:\n ShortWindow: %d\n LongWindow: %d\n CandleIntervalHours: %d\n", dema.ShortWindow, dema.LongWindow, dema.CandleIntervalHours)
 }
